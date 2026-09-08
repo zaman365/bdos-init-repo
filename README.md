@@ -1,0 +1,24 @@
+# BDOS — বিডস
+
+**Bangladesh On Stage.** A short-video, creator, affiliate and social-commerce ecosystem
+built for Bangladesh: Android-first, Bangla-first, escrow-native, payout-obsessive.
+
+> **দেখো · কিনো · কামাও** — Watch · Buy · Earn.
+
+This repository currently holds the plan and the brand system. Start here:
+
+| Document | What's in it |
+|---|---|
+| [docs/01-tiktok-ecosystem-study.md](docs/01-tiktok-ecosystem-study.md) | TikTok taken apart: the interest graph, creation as replication, the content→commerce→ads ladder, and the eight mechanics BDOS must reproduce |
+| [docs/02-bdos-product-ecosystem.md](docs/02-bdos-product-ecosystem.md) | The loop, the six surfaces, cross-cutting systems, personas |
+| [docs/03-architecture-and-stack.md](docs/03-architecture-and-stack.md) | Every stack decision with the alternative we rejected; video pipeline, ranking, the ledger |
+| [docs/04-brand-system.md](docs/04-brand-system.md) | The Matra identity, colour, dual-script typography, voice, gifts, sound |
+| [docs/05-bangladesh-operating-reality.md](docs/05-bangladesh-operating-reality.md) | COD and RTO, MFS payouts, escrow law, language, the commerce calendar, Nirapod |
+| [docs/06-roadmap-org-economics.md](docs/06-roadmap-org-economics.md) | Phases and their gates, org shape, revenue lines, unit economics, risks |
+| [bdos-ecosystem.html](bdos-ecosystem.html) | One-page summary of the whole ecosystem |
+| [brand/](brand/) | Design tokens (CSS + JSON), icon and wordmark |
+
+**Sequencing rule:** attention before commerce · commerce before ads · payouts before growth spend.
+
+All market figures in these documents are planning estimates, and all legal points need
+counsel's confirmation before they drive a decision.

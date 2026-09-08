@@ -1,0 +1,814 @@
+<title>BDOS Ecosystem Blueprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@400;500;600;700;800&family=Anek+Latin:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ── BDOS blueprint · dark-first token system ───────────────────────────── */
+:root{
+  --delta:#00E37A; --delta-deep:#00A85B; --sonar:#FFC24B; --padma:#FF3B4E;
+  --kalo:#0A0C0B;  --shapla:#F2F5F0;
+  --bg:#0A0C0B; --surface:#111614; --raised:#171E1B;
+  --text:#EAF0EC; --dim:#8A9A92; --faint:#5E6E67;
+  --rule:rgba(234,240,236,.13); --rule-soft:rgba(234,240,236,.07);
+  --accent:#00E37A;              /* accent that reads on the current ground */
+  --track:rgba(234,240,236,.09);
+  --f-disp:"Anek Latin","Anek Bangla","Noto Sans Bengali",system-ui,sans-serif;
+  --f-bn:"Anek Bangla","Noto Sans Bengali",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F2F5F0; --surface:#FFFFFF; --raised:#E9EEE9;
+    --text:#0C100E; --dim:#54655D; --faint:#7C8C84;
+    --rule:rgba(12,16,14,.16); --rule-soft:rgba(12,16,14,.08);
+    --accent:#00874A; --track:rgba(12,16,14,.09);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F2F5F0; --surface:#FFFFFF; --raised:#E9EEE9;
+  --text:#0C100E; --dim:#54655D; --faint:#7C8C84;
+  --rule:rgba(12,16,14,.16); --rule-soft:rgba(12,16,14,.08);
+  --accent:#00874A; --track:rgba(12,16,14,.09);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--f-disp); font-weight:400; font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.shell{max-width:1080px; margin:0 auto; padding:0 28px}
+p{margin:0 0 1em}
+.prose{max-width:66ch}
+a{color:var(--accent)}
+strong{font-weight:700}
+
+/* ── the matra: every section hangs from a line above it ────────────────── */
+.sec{position:relative; border-top:1px solid var(--rule); padding:60px 0 4px}
+.sec::before{content:""; position:absolute; top:-2px; left:0; width:64px; height:3px; background:var(--delta)}
+.eyebrow{
+  font-family:var(--f-mono); font-size:11.5px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--dim); margin:0 0 20px; display:block;
+}
+h2{
+  font-size:clamp(30px,4.6vw,44px); line-height:1.06; font-weight:800; font-stretch:92%;
+  letter-spacing:-.022em; margin:0 0 18px; text-wrap:balance; max-width:22ch;
+}
+h3{font-size:19px; font-weight:700; letter-spacing:-.01em; margin:0 0 6px; line-height:1.25}
+.lede{font-size:20px; line-height:1.55; color:var(--text); max-width:60ch}
+.dim{color:var(--dim)}
+
+/* ── masthead ───────────────────────────────────────────────────────────── */
+.mast{padding:64px 0 56px; border-bottom:1px solid var(--rule)}
+.wordmark{position:relative; display:inline-block; padding-top:.2em; line-height:.9}
+.wordmark .bar{
+  position:absolute; top:0; left:0; right:0; height:.085em; border-radius:99px;
+  background:linear-gradient(90deg,var(--delta) 0%,var(--sonar) 100%);
+}
+.wordmark .letters{
+  font-size:clamp(72px,15vw,148px); font-weight:800; font-stretch:88%;
+  letter-spacing:-.035em; display:block;
+}
+.mast-bn{font-family:var(--f-bn); font-weight:600; font-size:clamp(22px,4vw,32px); color:var(--dim); margin-top:6px}
+.tagline{
+  font-family:var(--f-bn); font-weight:700; font-size:clamp(24px,4.4vw,38px);
+  margin:28px 0 6px; letter-spacing:-.01em;
+}
+.tagline-en{font-family:var(--f-mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim)}
+.mast-thesis{font-size:20px; line-height:1.55; max-width:56ch; margin-top:30px}
+.spec{
+  display:flex; flex-wrap:wrap; gap:10px 0; margin-top:34px; padding-top:18px;
+  border-top:1px solid var(--rule-soft); font-family:var(--f-mono); font-size:11.5px;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--faint);
+}
+.spec span{padding-right:18px; margin-right:18px; border-right:1px solid var(--rule-soft)}
+.spec span:last-child{border-right:0}
+.caveat{
+  font-family:var(--f-mono); font-size:11.5px; line-height:1.7; color:var(--faint);
+  border-left:2px solid var(--sonar); padding-left:14px; margin-top:26px; max-width:62ch;
+}
+
+/* ── generic layout helpers ─────────────────────────────────────────────── */
+.cols{display:grid; gap:34px 40px; margin-top:34px}
+.cols-3{grid-template-columns:repeat(3,1fr)}
+.cols-2{grid-template-columns:repeat(2,1fr)}
+.item{border-top:2px solid var(--rule); padding-top:16px}
+.item .tag{font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); display:block; margin-bottom:10px}
+.item p{font-size:15.5px; line-height:1.6; color:var(--dim); margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; padding:0; list-style:none}
+.chips li{
+  font-family:var(--f-mono); font-size:11px; letter-spacing:.04em; color:var(--dim);
+  border:1px solid var(--rule); border-radius:99px; padding:3px 9px;
+}
+
+/* ── two-column "reality → consequence" list ────────────────────────────── */
+.pairs{margin-top:32px; border-top:1px solid var(--rule)}
+.pair{display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr); gap:12px 40px; padding:20px 0; border-bottom:1px solid var(--rule-soft)}
+.pair h4{margin:0; font-size:16.5px; font-weight:700; letter-spacing:-.01em}
+.pair .num{font-family:var(--f-mono); font-size:12px; color:var(--sonar); display:block; margin-bottom:4px; font-variant-numeric:tabular-nums}
+.pair p{margin:0; font-size:15.5px; line-height:1.6; color:var(--dim)}
+
+/* ── dark bands (fixed world, both themes) ──────────────────────────────── */
+.band{
+  --text:#EAF0EC; --dim:#95A69E; --faint:#67766F; --accent:#00E37A;
+  --rule:rgba(234,240,236,.14); --rule-soft:rgba(234,240,236,.07);
+  --surface:#141A17; --track:rgba(234,240,236,.1);
+  background:var(--kalo); color:var(--text); margin-top:72px; padding:4px 0 76px;
+}
+.band .sec{border-top-color:var(--rule)}
+
+/* ── colour swatches ────────────────────────────────────────────────────── */
+.swatches{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:32px}
+.sw-chip{height:104px; border-radius:6px; border:1px solid rgba(255,255,255,.1)}
+.sw h4{margin:12px 0 2px; font-size:16px; font-weight:700}
+.sw .hex{font-family:var(--f-mono); font-size:12px; color:var(--dim); font-variant-numeric:tabular-nums}
+.sw p{margin:6px 0 0; font-size:14px; line-height:1.5; color:var(--dim)}
+.rule-line{
+  margin-top:34px; font-size:19px; font-weight:600; letter-spacing:-.01em;
+  border-top:2px solid var(--sonar); padding-top:14px; max-width:60ch;
+}
+
+/* ── type specimen ──────────────────────────────────────────────────────── */
+.specimen{margin-top:32px; display:grid; gap:0}
+.spec-row{border-top:1px solid var(--rule); padding:22px 0; display:grid; grid-template-columns:96px 1fr; gap:24px; align-items:baseline}
+.spec-row .k{font-family:var(--f-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); padding-top:.7em}
+.big-bn{font-family:var(--f-bn); font-weight:700; font-size:clamp(30px,5.6vw,52px); line-height:1.25; letter-spacing:-.01em; margin:0}
+.big-lat{font-weight:800; font-stretch:88%; font-size:clamp(30px,5.6vw,52px); line-height:1.1; letter-spacing:-.03em; margin:0}
+.ladder{display:flex; flex-wrap:wrap; gap:4px 22px; align-items:baseline; margin:0}
+.ladder span{font-size:26px}
+
+/* ── gifts ──────────────────────────────────────────────────────────────── */
+.gifts{width:100%; border-collapse:collapse; margin-top:26px; font-size:15.5px}
+.gifts th{
+  text-align:left; font-family:var(--f-mono); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--faint); font-weight:400; padding:0 0 10px; border-bottom:1px solid var(--rule);
+}
+.gifts td{padding:11px 0; border-bottom:1px solid var(--rule-soft)}
+.gifts td:first-child{font-weight:600}
+.gifts td.bn{font-family:var(--f-bn); color:var(--dim)}
+.gifts td.val{text-align:right; font-family:var(--f-mono); color:var(--sonar); font-variant-numeric:tabular-nums; white-space:nowrap}
+
+/* ── diagrams ───────────────────────────────────────────────────────────── */
+.scroller{overflow-x:auto; margin-top:32px; padding-bottom:6px}
+.loop{display:block; min-width:660px; width:100%; height:auto}
+.loop text{font-family:var(--f-disp); font-size:14px}
+.loop .nlabel{font-weight:700; font-size:16px; letter-spacing:.01em}
+.loop .nsub{font-family:var(--f-mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase}
+
+/* ── stack diagram ──────────────────────────────────────────────────────── */
+.stack{margin-top:32px; display:grid; gap:2px}
+.layer{display:grid; grid-template-columns:150px 1fr; gap:20px; align-items:center; background:var(--surface); padding:16px 18px; border-left:3px solid var(--rule)}
+.layer.l-edge{border-left-color:var(--sonar)}
+.layer.l-svc{border-left-color:var(--delta)}
+.layer.l-data{border-left-color:var(--delta-deep)}
+.layer .lk{font-family:var(--f-mono); font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--dim)}
+.layer .lv{display:flex; flex-wrap:wrap; gap:6px}
+.layer .lv b{font-weight:500; font-size:13.5px; background:var(--raised); border-radius:5px; padding:4px 10px; white-space:nowrap}
+
+/* ── tables ─────────────────────────────────────────────────────────────── */
+.tbl-wrap{overflow-x:auto; margin-top:30px}
+table.decide{width:100%; min-width:640px; border-collapse:collapse; font-size:15px}
+table.decide th{
+  text-align:left; font-family:var(--f-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--dim); font-weight:400; padding:0 16px 10px 0; border-bottom:1px solid var(--rule); vertical-align:bottom;
+}
+table.decide td{padding:13px 16px 13px 0; border-bottom:1px solid var(--rule-soft); vertical-align:top; line-height:1.5}
+table.decide td:first-child{font-weight:600; white-space:nowrap}
+table.decide td.pick{color:var(--accent); font-weight:600}
+table.decide td.no{color:var(--faint); font-size:14px}
+
+/* ── economics chart ────────────────────────────────────────────────────── */
+.chart{margin-top:30px; display:grid; gap:14px}
+.crow{display:grid; grid-template-columns:minmax(150px,230px) 1fr 66px; gap:16px; align-items:center}
+.crow .cl{font-size:14.5px; line-height:1.35; color:var(--dim)}
+.crow .ct{height:26px; background:var(--track); border-radius:3px; overflow:hidden; display:flex}
+.crow .cf{height:100%}
+.crow .cv{font-family:var(--f-mono); font-size:14px; text-align:right; font-variant-numeric:tabular-nums; font-weight:500}
+.axis{display:flex; justify-content:space-between; font-family:var(--f-mono); font-size:11px; color:var(--faint); border-top:1px solid var(--rule); padding-top:6px}
+.axis-inner{display:grid; grid-template-columns:minmax(150px,230px) 1fr 66px; gap:16px; width:100%}
+.axis-inner .sp{display:flex; justify-content:space-between}
+.cap{font-size:13.5px; color:var(--faint); margin-top:14px; max-width:60ch; line-height:1.55}
+
+/* ── roadmap ────────────────────────────────────────────────────────────── */
+.phases{margin-top:34px}
+.phase{display:grid; grid-template-columns:104px 1fr; gap:28px; border-top:1px solid var(--rule); padding:24px 0}
+.phase .pk{font-family:var(--f-mono); font-size:13px; letter-spacing:.06em; color:var(--accent); font-variant-numeric:tabular-nums}
+.phase .pk small{display:block; color:var(--faint); letter-spacing:.1em; font-size:11px; margin-top:4px}
+.phase p{margin:6px 0 0; color:var(--dim); font-size:15.5px}
+.gate{
+  margin-top:12px; border-top:2px solid var(--sonar); padding-top:9px;
+  font-size:15px; color:var(--text); max-width:60ch;
+}
+.gate b{font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--sonar); display:block; margin-bottom:3px; font-weight:500}
+
+/* ── risks ──────────────────────────────────────────────────────────────── */
+.risks{margin-top:32px; display:grid; gap:0}
+.risk{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:14px 36px; border-top:1px solid var(--rule-soft); padding:16px 0}
+.risk .r{font-weight:600; font-size:16px}
+.risk .a{color:var(--dim); font-size:15px; line-height:1.55}
+
+/* ── close ──────────────────────────────────────────────────────────────── */
+.close{padding:60px 0 80px}
+.close-line{font-size:clamp(22px,3.4vw,32px); font-weight:700; letter-spacing:-.02em; line-height:1.25; max-width:24ch; border-top:3px solid var(--delta); padding-top:18px}
+.files{margin-top:38px; display:grid; gap:2px; font-family:var(--f-mono); font-size:13px}
+.files div{display:grid; grid-template-columns:minmax(0,290px) 1fr; gap:18px; padding:9px 0; border-top:1px solid var(--rule-soft)}
+.files span{color:var(--faint)}
+
+:focus-visible{outline:2px solid var(--delta); outline-offset:3px}
+@media (prefers-reduced-motion:no-preference){
+  .wordmark .bar{transform-origin:left center; animation:draw .7s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes draw{from{transform:scaleX(0)} to{transform:scaleX(1)}}
+}
+@media (max-width:860px){
+  .cols-3,.cols-2,.swatches{grid-template-columns:1fr}
+  .pair,.risk{grid-template-columns:1fr; gap:6px}
+  .layer{grid-template-columns:1fr; gap:10px}
+  .phase{grid-template-columns:1fr; gap:10px}
+  .crow,.axis-inner{grid-template-columns:1fr 60px}
+  .crow .cl{grid-column:1 / -1}
+  .axis-inner .lbl{display:none}
+  .spec-row{grid-template-columns:1fr; gap:8px}
+  .files div{grid-template-columns:1fr; gap:2px}
+}
+</style>
+
+<!-- ═════════════════════════ MASTHEAD ═════════════════════════ -->
+<header class="mast">
+  <div class="shell">
+    <div class="wordmark"><span class="bar"></span><span class="letters">BDOS</span></div>
+    <div class="mast-bn">বিডস · Bangladesh On Stage</div>
+    <p class="tagline">দেখো · কিনো · কামাও</p>
+    <p class="tagline-en">Watch · Buy · Earn</p>
+    <p class="mast-thesis">A short-video, creator, affiliate and commerce ecosystem built for
+      Bangladesh from the ground up — Android-first, Bangla-first, escrow-native, and
+      obsessive about whether a creator's money actually lands in their bKash.</p>
+    <div class="spec">
+      <span>Ecosystem blueprint</span><span>v1 · Sept 2026</span>
+      <span>6 surfaces</span><span>30-month plan</span>
+    </div>
+    <p class="caveat">Every market figure here is a planning estimate to be validated, and every
+      legal point needs counsel's confirmation before it drives a decision. The economics are an
+      illustrative model, not a forecast.</p>
+  </div>
+</header>
+
+<!-- ═════════════════════════ THE READ ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The read · what TikTok actually is</span>
+    <h2>It was never a video app. It's a ranking engine with things to rank.</h2>
+    <p class="lede dim">Every social product before it answered <em>"what did the people you follow
+      post?"</em> TikTok answers <em>"what will you watch next?"</em> — and it answers it for a
+      brand-new account within about ten videos of signal. Three things follow from that, and
+      they explain the entire commerce business.</p>
+
+    <div class="cols cols-3">
+      <div class="item">
+        <span class="tag">Mechanic 01</span>
+        <h3>Distribution is re-earned per video</h3>
+        <p>A creator with zero followers can reach a million people. Supply grows without a
+          follower grind, there is no permanent aristocracy, and every upload is an audition.</p>
+      </div>
+      <div class="item">
+        <span class="tag">Mechanic 02</span>
+        <h3>Creation tools are replication tools</h3>
+        <p>Sounds, templates, duet and stitch are not editing features. Each one lets a single
+          idea spawn a thousand variants — every variant is new inventory for the feed.</p>
+      </div>
+      <div class="item">
+        <span class="tag">Mechanic 03</span>
+        <h3>One ranked surface takes anything</h3>
+        <p>Because the feed already ranks, a product is just another rankable object. TikTok Shop
+          isn't a store bolted on — it is the same feed with SKUs in it.</p>
+      </div>
+    </div>
+
+    <div class="cols cols-2" style="margin-top:44px">
+      <div class="item">
+        <span class="tag">The ladder</span>
+        <h3>Content → Commerce → Ads</h3>
+        <p>The same attention is monetised three times, in rising order of margin certainty.
+          Organic content <em>proves</em> what people want, for free. Affiliate commerce converts
+          that signal into GMV with no inventory risk — the creator's commission is the customer
+          acquisition cost, and it is paid only on success. Then ads let a brand buy more of
+          exactly what already worked, with Spark-style promotion of real creator posts closing
+          the loop.</p>
+      </div>
+      <div class="item">
+        <span class="tag">What we don't copy</span>
+        <h3>Four deliberate departures</h3>
+        <p><strong>Opaque gift economics.</strong> BDOS publishes the split on every gift.
+          <strong>Black-box enforcement.</strong> Every action gets a plain-Bangla reason and one
+          appeal. <strong>Cross-border-first catalogue.</strong> Bangladesh's FX and customs
+          reality makes that a trap at launch — domestic supply first.
+          <strong>Growth before payouts work.</strong> If withdrawals fail, supply leaves and
+          never comes back.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ THE LOOP ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The loop · how BDOS turns</span>
+    <h2>Four parties, one circuit. Every feature must speed up an arrow.</h2>
+    <p class="prose dim">If a proposed feature doesn't make one of these arrows turn faster, it
+      doesn't ship. That single test is what keeps a platform this broad from sprawling.</p>
+
+    <div class="scroller">
+      <svg class="loop" viewBox="0 0 720 400" role="img"
+           aria-label="The BDOS loop: creators make content for viewers, viewers purchase from sellers, sellers supply affiliates with product and commission, affiliate earnings fund more content, and ads amplify what worked.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#00E37A"/>
+          </marker>
+        </defs>
+        <g fill="var(--surface)" stroke="var(--rule)" stroke-width="1">
+          <rect x="70"  y="52"  width="190" height="78" rx="10"/>
+          <rect x="460" y="52"  width="190" height="78" rx="10"/>
+          <rect x="460" y="270" width="190" height="78" rx="10"/>
+          <rect x="70"  y="270" width="190" height="78" rx="10"/>
+        </g>
+        <g text-anchor="middle" fill="var(--text)">
+          <text class="nlabel" x="165" y="88">Creator</text>
+          <text class="nsub"   x="165" y="110" fill="var(--dim)">makes</text>
+          <text class="nlabel" x="555" y="88">Viewer</text>
+          <text class="nsub"   x="555" y="110" fill="var(--dim)">watches</text>
+          <text class="nlabel" x="555" y="306">Seller</text>
+          <text class="nsub"   x="555" y="328" fill="var(--dim)">supplies</text>
+          <text class="nlabel" x="165" y="306">Affiliate</text>
+          <text class="nsub"   x="165" y="328" fill="var(--dim)">sells</text>
+        </g>
+        <g stroke="var(--delta)" stroke-width="1.6" fill="none" color="var(--delta)" marker-end="url(#ah)">
+          <line x1="268" y1="91"  x2="450" y2="91"/>
+          <line x1="555" y1="140" x2="555" y2="260"/>
+          <line x1="452" y1="309" x2="270" y2="309"/>
+          <line x1="165" y1="260" x2="165" y2="140"/>
+        </g>
+        <g fill="var(--dim)" font-size="13">
+          <text x="359" y="38" text-anchor="middle">content that earns attention</text>
+          <text x="574" y="196" text-anchor="start">purchase</text>
+          <text x="574" y="214" text-anchor="start" fill="var(--faint)">৳1,400 AOV</text>
+          <text x="359" y="372" text-anchor="middle">product · samples · commission plan</text>
+          <text x="146" y="196" text-anchor="end">earnings that</text>
+          <text x="146" y="214" text-anchor="end">fund more content</text>
+        </g>
+        <g text-anchor="middle">
+          <text x="359" y="192" fill="var(--sonar)" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="3">ADS</text>
+          <text x="359" y="214" fill="var(--faint)" font-size="13">buy more of what organic proved</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ SURFACES ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The ecosystem · six surfaces</span>
+    <h2>One app, six products, each owning one job in the loop.</h2>
+
+    <div class="cols cols-2">
+      <div class="item">
+        <span class="tag">Attention</span>
+        <h3>BDOS · the app</h3>
+        <p>For You, Following, <em>Pashe</em> (mutuals only), Search, LIVE, Shop, Inbox.
+          Photo carousels are first-class — they are data-cheap and hugely popular here.
+          Data Saver is a top-level toggle, not a buried setting.</p>
+        <ul class="chips"><li>480p default on cellular</li><li>&lt;40MB APK</li><li>Banglish search</li></ul>
+      </div>
+      <div class="item">
+        <span class="tag">Creation</span>
+        <h3>BDOS Cut · the editor</h3>
+        <p>Shipped as a first-class product, not a camera screen. Templates, sounds, duet, stitch,
+          Bangla auto-captions, AR effects — and product tagging <em>inside</em> the edit flow, so
+          the commerce hook is part of making, not an afterthought.</p>
+        <ul class="chips"><li>Templates</li><li>Duet · Stitch</li><li>Tag-while-editing</li></ul>
+      </div>
+      <div class="item">
+        <span class="tag">Commerce</span>
+        <h3>BDOS Shop</h3>
+        <p>Seller Center, catalogue, in-video and in-LIVE product anchors, vouchers and the Eid /
+          Boishakh campaign calendar. A public <em>Bharosha</em> trust score per seller —
+          fulfilment speed, return rate, dispute outcomes.</p>
+        <ul class="chips"><li>Escrow-native</li><li>COD + MFS</li><li>Courier adapters</li></ul>
+      </div>
+      <div class="item">
+        <span class="tag">Creators</span>
+        <h3>BDOS Studio</h3>
+        <p>Retention curves and earnings. The <em>Sonar Fund</em> pays on watch quality, not raw
+          views. LIVE gifting at a published 60/40 split in the creator's favour — better than
+          the market standard, and stated out loud because that is the recruiting argument.</p>
+        <ul class="chips"><li>Sonar Fund</li><li>60/40 gifts</li><li>Academy</li></ul>
+      </div>
+      <div class="item">
+        <span class="tag">Growth</span>
+        <h3>BDOS Affiliate</h3>
+        <p>Open, targeted and shop-wide plans, plus <em>sample requests</em> — the single highest
+          leverage mechanic in the whole system. A commission ledger with a visible hold period
+          tied to the return window, because an invisible hold reads as theft.</p>
+        <ul class="chips"><li>Showcase</li><li>Hold periods</li><li>Fraud clustering</li></ul>
+      </div>
+      <div class="item">
+        <span class="tag">Margin</span>
+        <h3>BDOS Ads</h3>
+        <p>Self-serve manager, Spark-style promotion of organic creator posts with revenue share,
+          pixel and server-side events, then automated campaigns once there is enough conversion
+          data to train on. Ads launch <em>last</em> — thin inventory burns advertiser trust.</p>
+        <ul class="chips"><li>Spark posts</li><li>Events API</li><li>Sales Max</li></ul>
+      </div>
+    </div>
+
+    <div class="pairs">
+      <div class="pair">
+        <div><span class="num">Cross-cutting</span><h4>Nirapod · the safety layer</h4></div>
+        <p>Harassment is the main reason women creators in Bangladesh stop posting. Bangla and
+          Banglish comment filtering, DMs off by default, one-tap block-report-mute-and-hide,
+          brigading detection across accounts, and a named human escalation path. Winning the
+          trust of women creators wins the supply side of this market outright. This is product
+          strategy, not a CSR line.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Cross-cutting</span><h4>The ledger</h4></div>
+        <p>Double-entry and append-only: buyer, seller, escrow, commission payable, gift
+          liability, tax withheld, courier payable. Every order, refund, accrual, gift and payout
+          is a balanced entry with an idempotency key, reconciled nightly against gateway, MFS
+          and courier settlement files. Drift pages a human.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ IDENTITY (dark band) ═════════════════════════ -->
+<div class="band">
+  <div class="shell">
+    <div class="sec">
+      <span class="eyebrow">Identity · the matra</span>
+      <h2>Bangla's headstroke, made the brand's spine.</h2>
+      <p class="lede dim">The <strong style="color:var(--text)">মাত্রা</strong> is the horizontal
+        line running across the top of Bangla letters, binding loose shapes into a word. Every
+        Bangla reader knows it without being taught it. Almost no global technology brand uses an
+        <em>overline</em> as its structural device. So that is the identity.</p>
+
+      <div class="cols cols-3" style="margin-top:40px">
+        <div class="item"><span class="tag">Wordmark</span>
+          <p>BDOS set heavy, bound at the top by a matra bar — four Latin letters carrying Bangla
+            grammar. Local structure, international form.</p></div>
+        <div class="item"><span class="tag">Icon</span>
+          <p>The bar over a play mark. It reads at once as a headstroke and as a stage lighting
+            truss. A stage, in one stroke.</p></div>
+        <div class="item"><span class="tag">In the product</span>
+          <p>Headings are overlined, not underlined. Tab indicators sit above the label. Progress
+            fills left to right — the direction Bangla is read.</p></div>
+      </div>
+
+      <h3 style="margin-top:56px; font-size:15px; font-family:var(--f-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--dim); font-weight:400">Palette</h3>
+      <div class="swatches">
+        <div class="sw"><div class="sw-chip" style="background:#00E37A"></div>
+          <h4>Delta Green</h4><div class="hex">#00E37A</div>
+          <p>Primary. Nods to the flag without literalism, and almost unused at this chroma by
+            Bangladeshi consumer brands.</p></div>
+        <div class="sw"><div class="sw-chip" style="background:#FFC24B"></div>
+          <h4>Sonar Gold</h4><div class="hex">#FFC24B</div>
+          <p>Money only. From <em>Sonar Bangla</em> — golden Bengal. Earnings, commission, gifts,
+            rewards get their own colour.</p></div>
+        <div class="sw"><div class="sw-chip" style="background:#FF3B4E"></div>
+          <h4>Padma Red</h4><div class="hex">#FF3B4E</div>
+          <p>LIVE, and nothing else, ever. Rationing is what gives one red dot its force.</p></div>
+        <div class="sw"><div class="sw-chip" style="background:#0A0C0B"></div>
+          <h4>Kalo</h4><div class="hex">#0A0C0B</div>
+          <p>The ground. Near-black with a faint green bias, so the neutrals belong to the family
+            rather than looking inherited.</p></div>
+        <div class="sw"><div class="sw-chip" style="background:#F2F5F0"></div>
+          <h4>Shapla</h4><div class="hex">#F2F5F0</div>
+          <p>Light ground and text on dark. Named for the national flower.</p></div>
+        <div class="sw"><div class="sw-chip" style="background:linear-gradient(90deg,#00E37A,#FFC24B)"></div>
+          <h4>Sonar Bhor</h4><div class="hex">gradient</div>
+          <p>Golden dawn, green to gold. At most once per screen — it is the exception, not the
+            texture.</p></div>
+      </div>
+      <p class="rule-line">Green moves you. Gold pays you. Red means live.<br>
+        <span class="dim" style="font-size:16px; font-weight:400">A colour that can't be explained in three words isn't in the palette.</span></p>
+
+      <h3 style="margin-top:64px; font-size:15px; font-family:var(--f-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--dim); font-weight:400">Typography · one superfamily, two scripts</h3>
+      <p class="prose dim" style="margin-top:14px">The real failure in Bangladeshi digital products:
+        Bangla set in a legacy face while Latin gets Roboto. Two unrelated designs, mismatched
+        x-heights, broken vertical rhythm — the fastest way to look like a knock-off. <strong
+        style="color:var(--text)">Anek</strong> (Ek Type, open licence) draws Bangla and Latin as
+        one system, both variable in weight and width. One family, two scripts, one rhythm.</p>
+      <div class="specimen">
+        <div class="spec-row"><div class="k">Bangla</div><p class="big-bn">দেখো · কিনো · কামাও</p></div>
+        <div class="spec-row"><div class="k">Latin</div><p class="big-lat">Watch · Buy · Earn</p></div>
+        <div class="spec-row"><div class="k">Weights</div>
+          <p class="ladder"><span style="font-weight:400">Anek 400</span><span style="font-weight:600">Anek 600</span><span style="font-weight:800">Anek 800</span><span class="dim" style="font-family:var(--f-mono); font-size:13px">IBM Plex Mono · data, labels, IDs</span></p></div>
+        <div class="spec-row"><div class="k">Numerals</div>
+          <p class="ladder"><span style="font-variant-numeric:tabular-nums">৳1,400</span><span class="dim" style="font-family:var(--f-bn)">১,৪০০</span><span class="dim" style="font-size:14px">tabular always; numeral system follows the language setting, currency stays ৳</span></p></div>
+      </div>
+
+      <h3 style="margin-top:64px; font-size:15px; font-family:var(--f-mono); letter-spacing:.14em; text-transform:uppercase; color:var(--dim); font-weight:400">Where the culture lives · the gift catalogue</h3>
+      <p class="prose dim" style="margin-top:14px">Not a generic rose. Gifts are commissioned from
+        rickshaw painters and kantha artists — craft bought from the artists who make it, used in
+        gifts and campaigns, never as interface wallpaper.</p>
+      <table class="gifts">
+        <thead><tr><th>Gift</th><th>বাংলা</th><th style="text-align:right">Price</th></tr></thead>
+        <tbody>
+          <tr><td>Shapla</td><td class="bn">শাপলা</td><td class="val">৳10</td></tr>
+          <tr><td>Rickshaw</td><td class="bn">রিকশা</td><td class="val">৳50</td></tr>
+          <tr><td>Nauka</td><td class="bn">নৌকা</td><td class="val">৳100</td></tr>
+          <tr><td>Ilish</td><td class="bn">ইলিশ</td><td class="val">৳500</td></tr>
+          <tr><td>Kacchi</td><td class="bn">কাচ্চি</td><td class="val">৳1,000</td></tr>
+          <tr><td>Royal Bengal</td><td class="bn">রয়েল বেঙ্গল</td><td class="val">৳5,000</td></tr>
+          <tr><td>Padma Setu</td><td class="bn">পদ্মা সেতু</td><td class="val">৳20,000</td></tr>
+        </tbody>
+      </table>
+      <p class="cap">Creator keeps 60% of every gift above, and the split is printed on the gift
+        sheet. Voice rule: “৳420 তোমার bKash-এ গেছে।” — never “Dear valued user, your withdrawal
+        request has been processed successfully.”</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════════════ THE BUILD ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The build · stack</span>
+    <h2>Hireable in Dhaka. Cheap on a 2GB phone. Cheap on bandwidth.</h2>
+    <p class="prose dim">Boring where it can be, fast where it must be, and never more than two
+      backend languages.</p>
+
+    <div class="stack">
+      <div class="layer"><div class="lk">Clients</div><div class="lv">
+        <b>Kotlin + Compose</b><b>Media3 / ExoPlayer</b><b>Kotlin Multiplatform core</b><b>Swift · AVFoundation</b><b>Next.js + TypeScript</b></div></div>
+      <div class="layer l-edge"><div class="lk">Edge &amp; delivery</div><div class="lv">
+        <b>Multi-CDN</b><b>BDIX peering</b><b>On-net ISP caches</b><b>LL-HLS / CMAF</b><b>Go API gateway</b></div></div>
+      <div class="layer l-svc"><div class="lk">Services · Go</div><div class="lv">
+        <b>feed-bff</b><b>create + transcode</b><b>shop</b><b>order + escrow</b><b>live</b><b>ads</b><b>trust</b><b>payouts</b></div></div>
+      <div class="layer l-svc"><div class="lk">Intelligence · Python</div><div class="lv">
+        <b>Two-tower retrieval</b><b>Multi-task ranker</b><b>Bangla NLP + ASR</b><b>Moderation models</b><b>Triton serving</b></div></div>
+      <div class="layer l-data"><div class="lk">Data</div><div class="lv">
+        <b>PostgreSQL</b><b>ScyllaDB</b><b>Redis</b><b>Kafka</b><b>ClickHouse</b><b>OpenSearch</b><b>Qdrant</b><b>MinIO</b></div></div>
+      <div class="layer"><div class="lk">Platform</div><div class="lv">
+        <b>Kubernetes</b><b>Terraform</b><b>ArgoCD</b><b>OpenTelemetry</b><b>In-country DC + cloud burst</b></div></div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table class="decide">
+        <thead><tr><th>Layer</th><th>Choice</th><th>Why here</th><th>Rejected</th></tr></thead>
+        <tbody>
+          <tr><td>Android</td><td class="pick">Kotlin · Compose · Media3</td>
+            <td>Nearly all of the market is Android, much of it 2GB RAM. A TikTok-grade feed needs player pooling, prefetch windows and precise memory control.</td>
+            <td class="no">Flutter / React Native — frame pacing and codec control on cheap devices</td></tr>
+          <tr><td>Shared logic</td><td class="pick">Kotlin Multiplatform</td>
+            <td>One implementation of money and API contracts across Android and iOS.</td>
+            <td class="no">Duplicating business rules per platform</td></tr>
+          <tr><td>Hot path</td><td class="pick">Go</td>
+            <td>Fan-out concurrency, small memory footprint, static binaries, fast to hire for in Dhaka.</td>
+            <td class="no">JVM (memory cost), Node (CPU-bound glue)</td></tr>
+          <tr><td>Money</td><td class="pick">PostgreSQL</td>
+            <td>Transactions where the ledger lives. Catalogue, orders, escrow, identity.</td>
+            <td class="no">NoSQL for orders — never</td></tr>
+          <tr><td>Scale store</td><td class="pick">ScyllaDB</td>
+            <td>Social graph, watch history, counters, DM and notification inbox at predictable p99.</td>
+            <td class="no">Cassandra — JVM ops overhead</td></tr>
+          <tr><td>Search</td><td class="pick">OpenSearch + Bangla analyser</td>
+            <td>People type “kacchi” and “কাচ্চি” for the same thing. Both must return the same results.</td>
+            <td class="no">Postgres FTS — no Bangla depth</td></tr>
+          <tr><td>Delivery</td><td class="pick">BDIX peering + ISP caches</td>
+            <td>Domestic peered delivery is a large multiple cheaper and faster than international transit. The highest-leverage decision in the plan.</td>
+            <td class="no">Cloud-only CDN — egress in foreign currency</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="cols cols-3" style="margin-top:48px">
+      <div class="item"><span class="tag">Video economics</span><h3>480p is the default rung</h3>
+        <p>Not 720p. Bandwidth is at once our largest variable cost and our users' loudest
+          complaint. Per-title encoding, an AV1 rung only for capable devices, and cold content
+          tiered off its top rungs after 72 hours.</p></div>
+      <div class="item"><span class="tag">Ranking</span><h3>Cold start is a contract</h3>
+        <p>Every new video gets a guaranteed audition of N impressions to a matched audience.
+          Ranking is multi-task — finish, like, comment, share, follow, product-click, purchase —
+          with diversity and fatigue constraints. Ads never merge into organic scoring.</p></div>
+      <div class="item"><span class="tag">Live</span><h3>LL-HLS for the room, WebRTC for the stage</h3>
+        <p>RTMP/SRT in, low-latency HLS out at 5–8 seconds for the audience at scale. WebRTC only
+          for co-hosting and PK battles, where latency is actually the product.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ THE GROUND ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The ground · Bangladesh, specifically</span>
+    <h2>The competitor isn't another video app. It's a Facebook Live with orders in the comments.</h2>
+    <p class="prose dim">A very large informal seller base already runs on Messenger threads and a
+      paper notebook. These are the constraints that change the product — not background colour.</p>
+
+    <div class="pairs">
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>Cash on delivery is still the majority of orders</h4></div>
+        <p><strong>So:</strong> COD is first-class, never a fallback — and return-to-origin becomes
+          a top-line metric. Countermeasures in order of impact: prepaid delivery fee on first
+          orders, OTP before dispatch, buyer trust scoring, address quality scoring, prepaid
+          incentives. A five-point RTO improvement is worth more than any pricing change.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>Mobile financial services are the only payout creators trust</h4></div>
+        <p><strong>So:</strong> payout reliability is a growth channel. A creator whose first ৳500
+          lands in bKash the day it clears tells ten creators. One failed withdrawal ends the
+          relationship permanently — which is why payouts ship before any growth spend.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>The law requires money to be held until delivery</h4></div>
+        <p><strong>So:</strong> escrow is architecture, not a feature. The 2021 digital commerce
+          rules came out of real marketplace collapses that cost real people their savings —
+          we treat the escrow requirement as the moral core of the product, and operate through a
+          licensed payment partner rather than holding funds ourselves.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>Prepaid data is bought in small packs</h4></div>
+        <p><strong>So:</strong> a heavy app isn't an inconvenience, it's a reason to uninstall.
+          Under 40MB, Android 8+, cold start under two seconds on a 2GB device, autoplay that
+          respects metered connections, and Data Saver at the top level.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>Bangla, Banglish, and four major dialects</h4></div>
+        <p><strong>So:</strong> Bangla is the default, not a translation layer. Search indexes
+          script and transliteration together. Moderation models must read Sylheti, Chittagonian,
+          Noakhali and Barishali abuse plus the coded language harassment actually uses —
+          off-the-shelf English classifiers pass it straight through.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>The year has one peak, and it's Eid</h4></div>
+        <p><strong>So:</strong> capacity, seller onboarding and creator campaigns are planned
+          backwards from Ramadan and Eid-ul-Fitr, then Eid-ul-Adha, Pohela Boishakh, Durga Puja
+          and the winter wedding season. A platform that misses its first Eid waits a year.</p>
+      </div>
+      <div class="pair">
+        <div><span class="num">Reality</span><h4>Content law carries real liability</h4></div>
+        <p><strong>So:</strong> a published Bangla content policy, a logged takedown workflow with
+          legal review, a transparency report, and a local policy council for religiously and
+          politically sensitive escalations. Communal or blasphemy accusations can move from a
+          comment thread to physical violence — that path is a safety system with its own
+          protocol, not a moderation queue.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ THE MONEY ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The money · six lines, two levers</span>
+    <h2>Commission, gifts, ads, fulfilment, seller services — then credit.</h2>
+    <p class="prose dim">Follow one ৳1,400 order through the system. The chart is a model built on
+      stated assumptions to show <em>where the margin goes</em>, not a projection of what BDOS
+      will earn.</p>
+
+    <div class="chart">
+      <div class="crow">
+        <div class="cl">Commission collected <span class="dim">· 6% of a ৳1,400 order</span></div>
+        <div class="ct"><div class="cf" style="width:100%; background:var(--delta)"></div></div>
+        <div class="cv">৳84</div>
+      </div>
+      <div class="crow">
+        <div class="cl">Paid to the affiliate creator <span class="dim">· up to 4%</span></div>
+        <div class="ct"><div class="cf" style="width:46.4%; background:var(--sonar)"></div></div>
+        <div class="cv">৳39</div>
+      </div>
+      <div class="crow">
+        <div class="cl">Platform, before delivery failure</div>
+        <div class="ct"><div class="cf" style="width:53.6%; background:var(--delta)"></div></div>
+        <div class="cv">৳45</div>
+      </div>
+      <div class="crow">
+        <div class="cl">Platform, after 25% return-to-origin</div>
+        <div class="ct"><div class="cf" style="width:40.5%; background:var(--delta-deep)"></div><div class="cf" style="width:13.1%; background:var(--padma); opacity:.55"></div></div>
+        <div class="cv">৳34</div>
+      </div>
+      <div class="axis"><div class="axis-inner"><div class="lbl"></div><div class="sp"><span>৳0</span><span>৳84 — commission scale</span></div><div></div></div></div>
+    </div>
+    <p class="cap">Illustrative model on a ৳1,400 order at a 6% seller commission and 25% RTO.
+      The red segment is revenue lost to failed delivery. Affiliate commission is the only
+      customer-acquisition cost in that chain — and it is paid only when an order succeeds.</p>
+
+    <div class="cols cols-2" style="margin-top:52px">
+      <div class="item"><span class="tag">Revenue lines</span><h3>Six, in order of arrival</h3>
+        <p>GMV commission at 3–8% by category · LIVE gifting at a 40% platform share · ads from
+          phase four · fulfilment and logistics margin · seller services such as promoted listings
+          and analytics tiers · then credit and BNPL economics with an NBFI partner.</p></div>
+      <div class="item"><span class="tag">The two levers</span><h3>RTO and delivery cost</h3>
+        <p>On the commerce side, return-to-origin dominates everything in the table above. On the
+          content side, the equivalent is cost per thousand seconds watched — which is why
+          BDIX peering is a phase-zero workstream and not an optimisation for later.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ THE SEQUENCE ═════════════════════════ -->
+<section class="shell">
+  <div class="sec">
+    <span class="eyebrow">The sequence · phases and their gates</span>
+    <h2>Attention before commerce. Commerce before ads. Payouts before growth spend.</h2>
+    <p class="prose dim">A phase doesn't end on a date. It ends when its gate is met — which is the
+      only thing standing between a plan like this and a burn rate like this.</p>
+
+    <div class="phases">
+      <div class="phase">
+        <div class="pk">P0<small>Month 0–4</small></div>
+        <div>
+          <h3>Foundation</h3>
+          <p>Company, licences and payment-partner work started. Brand and design system.
+            Kubernetes footprint across an in-country DC and cloud burst. Identity and phone auth.
+            The complete upload → transcode → deliver → play path. Closed alpha with 100
+            hand-picked Dhaka creators.</p>
+          <div class="gate"><b>Gate</b>Those 100 creators post three times a week without being asked.</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pk">P1<small>Month 5–10</small></div>
+        <div>
+          <h3>Attention</h3>
+          <p>Public Android launch. For You and Following, BDOS Cut with templates, duet and
+            stitch, a licensed sounds library, Bangla auto-captions, Nirapod v1, Bangla and
+            Banglish moderation v1, and the Sonar Fund pilot.</p>
+          <div class="gate"><b>Gate</b>D30 retention at or above 25%, 45+ minutes per daily active user, 20k weekly active creators.</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pk">P2<small>Month 11–16</small></div>
+        <div>
+          <h3>Commerce</h3>
+          <p>BDOS Shop and Seller Center, the escrow ledger, COD plus MFS plus cards, a courier
+            abstraction with three partners live, product tags inside the editor, Affiliate v1
+            with sample requests, and the Bharosha seller score.</p>
+          <div class="gate"><b>Gate</b>RTO under 25%, the commission ledger reconciling to the paisa, seller repeat-listing rate holding.</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pk">P3<small>Month 17–22</small></div>
+        <div>
+          <h3>Live &amp; scale</h3>
+          <p>BDOS LIVE with published gift splits, LIVE shopping, iOS, the web surfaces, the
+            Partner Network for SME onboarding outside Dhaka, and a Fulfilled-by-BDOS pilot.</p>
+          <div class="gate"><b>Gate</b>Creator payout success at or above 99.5%, positive gifting revenue per live hour.</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pk">P4<small>Month 23–30</small></div>
+        <div>
+          <h3>Margin</h3>
+          <p>BDOS Ads self-serve, Spark-style promotion of organic creator posts, pixel and
+            server-side events, automated Sales Max campaigns, and nationwide category expansion.</p>
+          <div class="gate"><b>Gate</b>Advertiser 90-day repeat spend rate.</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pk">P5<small>Year 3+</small></div>
+        <div>
+          <h3>Platform</h3>
+          <p>AI creative suite, seller credit and BNPL with an NBFI partner, diaspora cross-border
+            selling into the UK, US and Gulf, and open APIs with a developer platform.</p>
+          <div class="gate"><b>Gate</b>Third-party developers shipping against the API without hand-holding.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cols cols-2" style="margin-top:52px">
+      <div class="item"><span class="tag">Org shape at end of P2</span><h3>Trust &amp; Safety is the biggest team</h3>
+        <p>Roughly 110 people, and the largest single function is moderation — 24/7, in-house,
+          Bangla plus dialects. That is a deliberate cost choice: outsourced English-first
+          moderation cannot read Sylheti harassment, and getting it wrong is an existential brand
+          risk, not a service-quality issue.</p>
+        <ul class="chips"><li>T&amp;S 28</li><li>Backend 22</li><li>Client 18</li><li>Seller ops 12</li><li>ML 12</li><li>Infra 10</li><li>Creator ops 10</li><li>Product + design 14</li><li>Finance &amp; legal 8</li></ul></div>
+      <div class="item"><span class="tag">Risks</span><h3>What we're actually exposed to</h3>
+        <div class="risks">
+          <div class="risk" style="border-top:0; padding-top:0"><div class="r">Incumbent gravity</div><div class="a">Don't fight on general social. Win on seller tooling, escrow trust, payouts that work, and women's safety.</div></div>
+          <div class="risk"><div class="r">COD and affiliate fraud</div><div class="a">Device and address clustering, velocity limits, hold periods, clawbacks.</div></div>
+          <div class="risk"><div class="r">A moderation failure going viral</div><div class="a">Human review on high-reach content, fast escalation, honest post-mortems.</div></div>
+          <div class="risk"><div class="r">Music licensing gaps</div><div class="a">Label-by-label deals before launch. A legally clean sounds library, or none.</div></div>
+          <div class="risk"><div class="r">Capital intensity</div><div class="a">Spend is phased against gates; ads and fulfilment stay deferred until the loop is proven.</div></div>
+        </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ CLOSE ═════════════════════════ -->
+<section class="shell">
+  <div class="close">
+    <p class="close-line">What would make this fail fastest.</p>
+    <p class="prose dim" style="margin-top:20px">Launching commerce before the feed has supply.
+      Paying for growth before withdrawals to bKash work reliably. Treating moderation as a vendor
+      line item. Setting Bangla in Roboto.</p>
+    <div class="files">
+      <div><b>docs/01-tiktok-ecosystem-study.md</b><span>TikTok taken apart · the eight mechanics to reproduce</span></div>
+      <div><b>docs/02-bdos-product-ecosystem.md</b><span>The loop, six surfaces, cross-cutting systems, personas</span></div>
+      <div><b>docs/03-architecture-and-stack.md</b><span>Every decision with its rejected alternative</span></div>
+      <div><b>docs/04-brand-system.md</b><span>The Matra identity, colour, dual-script type, voice</span></div>
+      <div><b>docs/05-bangladesh-operating-reality.md</b><span>COD, MFS, escrow law, language, calendar, Nirapod</span></div>
+      <div><b>docs/06-roadmap-org-economics.md</b><span>Phases and gates, org, revenue lines, unit economics</span></div>
+      <div><b>brand/tokens.css · tokens.json</b><span>Design tokens · icon and wordmark</span></div>
+    </div>
+  </div>
+</section>

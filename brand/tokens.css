@@ -1,0 +1,32 @@
+/* BDOS design tokens — the Matra system.
+   Rule: green moves you, gold pays you, red means live. */
+:root {
+  /* brand — fixed, do not theme */
+  --bdos-delta:      #00E37A;  /* primary action, brand */
+  --bdos-delta-deep: #00A85B;  /* green on light grounds, pressed */
+  --bdos-sonar:      #FFC24B;  /* money: earnings, commission, gifts */
+  --bdos-padma:      #FF3B4E;  /* LIVE only */
+  --bdos-kalo:       #0A0C0B;  /* ground */
+  --bdos-shapla:     #F2F5F0;  /* light ground / text on dark */
+
+  /* neutrals, biased toward the accent hue (~155deg) */
+  --bdos-n900: #0A0C0B;
+  --bdos-n800: #121614;
+  --bdos-n700: #1B211E;
+  --bdos-n500: #4A5A53;
+  --bdos-n300: #8A9A92;
+  --bdos-n100: #D8E0DB;
+
+  --bdos-gradient-sonar-bhor: linear-gradient(90deg, #00E37A 0%, #FFC24B 100%);
+
+  /* type */
+  --bdos-font-display: "Anek Latin", "Anek Bangla", "Noto Sans Bengali", sans-serif;
+  --bdos-font-text:    "Anek Latin", "Anek Bangla", "Noto Sans Bengali", sans-serif;
+  --bdos-font-bangla:  "Anek Bangla", "Noto Sans Bengali", sans-serif;
+  --bdos-font-mono:    "IBM Plex Mono", ui-monospace, monospace;
+
+  /* the matra */
+  --bdos-matra-weight: 3px;
+  --bdos-matra-nib:    64px;
+  --bdos-radius:       10px;
+}

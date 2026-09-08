@@ -1,0 +1,13 @@
+<!-- Reference lockup. Ship the production wordmark as outlined paths. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 130" width="420" height="130" role="img" aria-label="BDOS">
+  <defs>
+    <linearGradient id="wm" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#00E37A"/><stop offset="1" stop-color="#FFC24B"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="18" width="404" height="9" rx="4.5" fill="url(#wm)"/>
+  <text x="8" y="104" fill="#F2F5F0" font-family="Anek Latin, Noto Sans Bengali, sans-serif"
+        font-weight="800" font-size="92" letter-spacing="-2">BDOS</text>
+  <text x="286" y="104" fill="#8A9A92" font-family="Anek Bangla, Noto Sans Bengali, sans-serif"
+        font-weight="600" font-size="34">বিডস</text>
+</svg>
