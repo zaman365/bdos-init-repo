@@ -18,6 +18,28 @@ This repository currently holds the plan and the brand system. Start here:
 | [bdos-ecosystem.html](bdos-ecosystem.html) | One-page summary of the whole ecosystem |
 | [brand/](brand/) | Design tokens (CSS + JSON), icon and wordmark |
 
+## Deployment
+
+Live at **https://bdos.io** via Cloudflare Pages (project `bdos`), auto-deployed from
+`main`. Pages settings: no build command, build output directory `site`.
+
+| Path | What | Exposure |
+|---|---|---|
+| `site/index.html` | Public landing page + waitlist | Public |
+| `site/404.html` | Branded not-found page | Public |
+| `functions/api/waitlist.js` | Waitlist endpoint, writes to the `WAITLIST` KV binding (namespace `bdos-waitlist`) | Public POST |
+| `site/blueprint/index.html` | The full ecosystem blueprint | **Gated — do not deploy ungated** |
+
+`site/blueprint/index.html` is generated from the canonical `bdos-ecosystem.html`:
+
+```
+python3 scripts/build-blueprint.py
+```
+
+It holds take rates, unit economics, org headcount and the risk register, so it must
+only be served behind Cloudflare Access. It is deliberately absent from `site/` until
+that gate exists.
+
 **Sequencing rule:** attention before commerce · commerce before ads · payouts before growth spend.
 
 All market figures in these documents are planning estimates, and all legal points need
