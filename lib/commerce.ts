@@ -55,6 +55,8 @@ export async function commerceCommand(
     const d = z
       .object({
         id: uuid.optional(),
+        version: z.number().int().nonnegative().optional(),
+        skuVersion: z.number().int().nonnegative().optional(),
         title: z.string().trim().min(2).max(160),
         titleBn: z.string().trim().min(2).max(160),
         description: z.string().max(3000),
@@ -82,6 +84,26 @@ export async function commerceCommand(
         ),
         "Product belongs to another seller",
         403,
+      );
+      need(
+        d.version !== undefined && d.skuVersion !== undefined,
+        "Reload the product before editing",
+        409,
+      );
+      const current = await one(
+        db,
+        "SELECT version FROM commerce.product WHERE id=$1 FOR UPDATE",
+        [d.id],
+      );
+      const variant = await one(
+        db,
+        "SELECT version FROM commerce.sku WHERE product_id=$1 AND code='default' FOR UPDATE",
+        [d.id],
+      );
+      need(
+        current?.version === d.version && variant?.version === d.skuVersion,
+        "Stock or product changed. Refresh and reopen this form.",
+        409,
       );
       await db.query(
         "UPDATE commerce.product SET title_en=$2,title_bn=$3,description=$4,category_id=$5,is_active=$6,cover=$7 WHERE id=$1",
@@ -117,6 +139,8 @@ export async function commerceCommand(
     const d = z
       .object({
         productId: uuid,
+        id: uuid.optional(),
+        version: z.number().int().nonnegative().optional(),
         label: z.string().trim().min(1).max(60),
         price: z.number().int().min(100).max(100000000),
         stock: z.number().int().min(0).max(100000),
@@ -131,6 +155,20 @@ export async function commerceCommand(
       "Product belongs to another seller",
       403,
     );
+    if (d.id) {
+      need(d.version !== undefined, "Reload the variant before editing", 409);
+      const updated = await one(
+        db,
+        "UPDATE commerce.sku SET variant_label=$3,price_paisa=$4,stock=$5 WHERE id=$1 AND product_id=$2 AND version=$6 RETURNING id",
+        [d.id, d.productId, d.label, d.price, d.stock, d.version],
+      );
+      need(
+        updated,
+        "Variant changed or is unavailable. Refresh and reopen this form.",
+        409,
+      );
+      return { id: d.id, message: "Variant updated" };
+    }
     await db.query(
       "INSERT INTO commerce.sku(product_id,code,variant_label,price_paisa,stock) VALUES($1,$2,$3,$4,$5)",
       [d.productId, randomUUID(), d.label, d.price, d.stock],
@@ -145,6 +183,13 @@ export async function commerceCommand(
         postId: uuid.optional(),
       })
       .parse(raw);
+    if (d.qty === 0) {
+      await db.query(
+        "DELETE FROM commerce.cart WHERE user_id=$1 AND sku_id=$2",
+        [u.id, d.skuId],
+      );
+      return { message: "Item removed" };
+    }
     await flag(db, "commerce");
     const p = await one(
       db,

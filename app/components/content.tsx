@@ -30,11 +30,13 @@ export function Feed({
   setMode,
   q,
   clearSearch,
+  page,
 }: {
   mode: string;
   setMode: (m: string) => void;
   q: string;
   clearSearch: () => void;
+  page: (cursor: string) => void;
 }) {
   const { data, t, go } = useApp();
   return (
@@ -84,6 +86,18 @@ export function Feed({
                 {index === 3 && data.ads?.[0] && <AdCard ad={data.ads[0]} />}
               </div>
             ))}
+          </div>
+          <div className="actions">
+            {(data.feedCursor || data.sharedPost) && (
+              <button className="secondary" onClick={() => page("")}>
+                {t("নতুন গল্প", "Latest stories")}
+              </button>
+            )}
+            {data.nextCursor && (
+              <button className="primary" onClick={() => page(data.nextCursor)}>
+                {t("আগের গল্প দেখো", "Older stories")}
+              </button>
+            )}
           </div>
           {!data.posts?.length && (
             <Empty
@@ -377,9 +391,7 @@ function PostCard({ post: p }: { post: Row }) {
             aria-label="Copy post link"
             onClick={() =>
               void navigator.clipboard
-                .writeText(
-                  `${location.origin}/?q=${encodeURIComponent(p.caption.slice(0, 100))}`,
-                )
+                .writeText(`${location.origin}/?view=feed&post=${p.id}`)
                 .then(() => toast(t("লিংক কপি হয়েছে", "Link copied")))
                 .catch(() => toast("Could not copy link"))
             }
@@ -445,6 +457,14 @@ function PostCard({ post: p }: { post: Row }) {
         )}
         {comments && (
           <div className="comments">
+            {p.comments > 30 && (
+              <small>
+                {t(
+                  "পিন করা ও সাম্প্রতিক ৩০টি মন্তব্য",
+                  "Showing pinned and recent comments (up to 30).",
+                )}
+              </small>
+            )}
             {p.comment_list?.map((c: Row) => (
               <div key={c.id}>
                 <strong>

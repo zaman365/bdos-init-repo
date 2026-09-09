@@ -52,3 +52,30 @@ export function failure(error: unknown) {
     { status: 500 },
   );
 }
+
+// Bound bytes before buffering, including chunked requests without Content-Length.
+export async function readBody(
+  request: Request,
+  limit = 100000,
+): Promise<string> {
+  need(
+    Number(request.headers.get("content-length") ?? 0) <= limit,
+    "Request too large",
+    413,
+  );
+  const reader = request.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > limit) {
+      await reader.cancel();
+      need(false, "Request too large", 413);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}

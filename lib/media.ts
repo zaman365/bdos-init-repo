@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile, unlink, stat } from "node:fs/promises";
 import path from "node:path";
@@ -59,9 +60,32 @@ export async function upload(u: User, request: Request) {
     file.size > 0 && file.size <= 20 * 1024 * 1024,
     "Upload a file under 20 MB",
   );
-  const bytesBuffer = Buffer.from(await file.arrayBuffer());
+  let bytesBuffer = Buffer.from(await file.arrayBuffer());
   let kind = detect(bytesBuffer);
   need(kind, "Use a PNG, JPEG, WebP, MP4 or WebM file");
+  if (kind.mime.startsWith("image/")) {
+    try {
+      bytesBuffer = await sharp(bytesBuffer, {
+        limitInputPixels: 24_000_000,
+        failOn: "warning",
+      })
+        .rotate()
+        .resize({
+          width: 1920,
+          height: 1920,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .webp({ quality: 82 })
+        .toBuffer();
+      kind = { mime: "image/webp", ext: "webp" };
+    } catch {
+      need(
+        false,
+        "Image could not be decoded. Use a valid image up to 24 megapixels.",
+      );
+    }
+  }
   await mkdir(directory(), { recursive: true });
   const id = randomUUID();
   let filename = `${id}.${kind.ext}`;
@@ -79,6 +103,10 @@ export async function upload(u: User, request: Request) {
           [
             "-nostdin",
             "-y",
+            "-protocol_whitelist",
+            "file,pipe",
+            "-threads",
+            "2",
             "-i",
             source,
             "-t",
@@ -105,7 +133,8 @@ export async function upload(u: User, request: Request) {
         await unlink(
           path.join(/* turbopackIgnore: true */ directory(), out),
         ).catch(() => {});
-        throw new Error(
+        need(
+          false,
           "Video processing failed. Check FFMPEG_PATH and upload a valid video.",
         );
       }
@@ -137,7 +166,7 @@ export async function mediaResponse(u: User, id: string, request: Request) {
     need(
       await one(
         pool,
-        "SELECT 1 FROM content.post WHERE media_id=$1 AND state='published'",
+        "SELECT 1 FROM content.post p JOIN identity.user_account u ON u.id=p.author_id WHERE p.media_id=$1 AND p.state='published' AND u.state='active'",
         [id],
       ),
       "Media not found",

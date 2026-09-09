@@ -1,7 +1,7 @@
 try {
   process.loadEnvFile(".env.local");
 } catch {}
-const { pool, tx, one } = await import("../lib/db");
+const { pool, tx, one, audit } = await import("../lib/db");
 const { clearDue } = await import("../lib/creator");
 const { lockCommand } = await import("../lib/locks");
 const result = await tx(async (db) => {
@@ -17,19 +17,32 @@ const result = await tx(async (db) => {
     {},
   );
   const cleared = await clearDue(db);
-  await db.query("DELETE FROM app.otp WHERE expires_at<now()-interval '1 day'");
-  await db.query("DELETE FROM app.session WHERE expires_at<now()");
-  await db.query(
-    "DELETE FROM app.rate_limit WHERE resets_at<now()-interval '1 day'",
+  const otp = await db.query("DELETE FROM app.otp WHERE expires_at<now()");
+  const sessions = await db.query(
+    "DELETE FROM app.session WHERE expires_at<now()",
   );
-  await db.query(
+  const rates = await db.query(
+    "DELETE FROM app.rate_limit WHERE resets_at<now()",
+  );
+  const signals = await db.query(
     "DELETE FROM live.signal WHERE created_at<now()-interval '1 hour'",
   );
-  // Financial command receipts and journals are deliberately retained indefinitely.
+  const receipts = await db.query(
+    "DELETE FROM app.command WHERE action IN ('watch','signal','like','preference','read-notifications') AND created_at<now()-interval '30 days'",
+  );
+  // Financial and unclassified legacy receipts and all journals remain intact.
   const trial = await one(db, "SELECT * FROM ledger.trial_balance");
   if (trial!.drift_paisa !== 0)
     throw new Error("Ledger drift detected; pause payouts and investigate");
-  return { cleared, ...trial };
+  const removed = {
+    otp: otp.rowCount,
+    sessions: sessions.rowCount,
+    rates: rates.rowCount,
+    signals: signals.rowCount,
+    nonfinancialReceipts: receipts.rowCount,
+  };
+  await audit(db, operator.id, "maintenance", undefined, { cleared, removed });
+  return { cleared, removed, ...trial };
 });
 console.log(JSON.stringify(result, null, 2));
 await pool.end();

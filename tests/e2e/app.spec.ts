@@ -71,6 +71,7 @@ test("create a story and retain it after reload", async ({ page }) => {
     .getByRole("button", { name: "Publish story", exact: true })
     .click();
   await expect(page.getByRole("status")).toContainText("published");
+  await navigate(page, "Creator Studio");
   await page.reload();
   await expect(page.getByText(caption, { exact: true }).first()).toBeVisible();
 });
@@ -100,4 +101,59 @@ test("checkout, confirm and cancel with a persistent cart", async ({
   await expect(page.getByRole("article")).toContainText("confirmed");
   await page.getByRole("button", { name: "Cancel order", exact: true }).click();
   await expect(page.getByRole("article")).toContainText("cancelled");
+});
+
+test("navigation survives reload and browser back", async ({ page }) => {
+  await navigate(page, "Shop");
+  await expect(page).toHaveURL(/view=shop/);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", {
+      name: "Local craft. Lovely finds.",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await navigate(page, "Affiliate");
+  await page.goBack();
+  await expect(
+    page.getByRole("heading", {
+      name: "Local craft. Lovely finds.",
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+test("a lost publish response retries without a duplicate story", async ({
+  page,
+}) => {
+  await navigate(page, "BDOS Cut");
+  const caption = `Lost response ${randomUUID()}`;
+  let intercepted = false;
+  const keys: string[] = [];
+  await page.route("**/api/command", async (route) => {
+    const data = route.request().postDataJSON();
+    if (data.action !== "post") return route.continue();
+    keys.push(data.key);
+    if (!intercepted) {
+      intercepted = true;
+      await route.fetch();
+      await route.abort("failed");
+    } else await route.continue();
+  });
+  await page.getByLabel("Caption", { exact: true }).fill(caption);
+  await page
+    .getByRole("button", { name: "Publish story", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("published");
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
+  const data = await (await page.request.get("/api/data?view=studio")).json();
+  expect(
+    data.ownPosts.filter((p: { caption: string }) => p.caption === caption),
+  ).toHaveLength(1);
+  const id = data.ownPosts.find(
+    (p: { caption: string }) => p.caption === caption,
+  ).id;
+  await page.goto(`/?view=feed&post=${id}`);
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await expect(page.getByText(caption, { exact: true })).toBeVisible();
 });

@@ -35,12 +35,12 @@ layer alone would be a liability.
 
 ## Concurrency
 
-- A global lock is not a concurrency strategy. `lib/commands.ts` takes one
-  advisory lock for every mutation platform-wide (audit H4) — acceptable for a
-  demo, a hard ceiling for anything else.
-- Lock **per entity, in a fixed order**: order, then seller, then creator. A
-  fixed order is what prevents deadlock; a fixed order across the whole
-  codebase is what prevents it under change.
+- A global lock is not a concurrency strategy. `lib/locks.ts` resolves affected
+  parties and entities and acquires advisory locks in lexical order. Preserve
+  that order across all command and maintenance paths.
+- Stock and catalog forms carry database versions. A stale update fails with
+  409 and asks the seller to refresh; it must never restore inventory reserved
+  by a concurrent checkout.
 - Anything that touches two parties' money happens in one transaction, or it
   happens with a compensating entry. There is no third option.
 

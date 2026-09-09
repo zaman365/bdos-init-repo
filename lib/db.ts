@@ -15,6 +15,8 @@ export const pool = (g.bdosPool ??= new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
   connectionTimeoutMillis: 5000,
+  statement_timeout: 15000,
+  idle_in_transaction_session_timeout: 30000,
 }));
 export async function rows(
   db: DB,

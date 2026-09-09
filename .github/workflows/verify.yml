@@ -31,6 +31,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - run: npm run db:test
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: bdos
+          PGPASSWORD: bdos_test
       - run: npm run db:migrate && npm run db:seed
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

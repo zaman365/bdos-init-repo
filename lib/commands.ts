@@ -18,6 +18,13 @@ export async function command(u: User, body: unknown) {
   await rate((await import("./db")).pool, `command:${u.id}`, 180, 60);
   return tx(async (db) => {
     await lockCommand(db, u, d.action, d.data);
+    const active = await one(
+      db,
+      "SELECT * FROM identity.user_account WHERE id=$1 AND state='active'",
+      [u.id],
+    );
+    need(active, "This account is restricted", 403);
+    u = active as User;
     const fingerprint = hash(
       JSON.stringify({ action: d.action, data: d.data }),
     );
@@ -47,8 +54,8 @@ export async function command(u: User, body: unknown) {
     }
     need(result, "Unknown command", 404);
     await db.query(
-      "INSERT INTO app.command(user_id,key,fingerprint,response) VALUES($1,$2,$3,$4)",
-      [u.id, d.key, fingerprint, JSON.stringify(result)],
+      "INSERT INTO app.command(user_id,key,fingerprint,response,action) VALUES($1,$2,$3,$4,$5)",
+      [u.id, d.key, fingerprint, JSON.stringify(result), d.action],
     );
     if (!["watch", "signal", "like", "ad-event"].includes(d.action))
       await audit(
@@ -56,6 +63,9 @@ export async function command(u: User, body: unknown) {
         u.id,
         d.action,
         result.id ?? (d.data.id as string | undefined),
+        d.action === "admin-flag"
+          ? { name: d.data.name, enabled: d.data.enabled }
+          : {},
       );
     return result;
   });

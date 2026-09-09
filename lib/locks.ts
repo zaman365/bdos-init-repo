@@ -28,6 +28,17 @@ export async function lockCommand(
         if (typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value))
           keys.add(`party:${value}`);
   };
+  if (id && action === "admin-moderate") {
+    const cases = await rows(
+      db,
+      "SELECT post_id,subject_id FROM trust.moderation_case WHERE id=$1",
+      [id],
+    );
+    for (const c of cases) {
+      if (c.post_id) keys.add(`entity:${c.post_id}`);
+      if (c.subject_id) keys.add(`party:${c.subject_id}`);
+    }
+  }
   if (id) {
     if (action === "order")
       party(

@@ -40,31 +40,36 @@ query with bound parameters is a PII leak into whatever aggregates logs.
 | OTP codes | 5 minutes | Longer is only useful to an attacker |
 | Session tokens | 7 days | Rotate on privilege change |
 | Rate-limit counters | Until reset | Operational only |
-| Idempotency responses | 30 days | Long enough for a retry, not a record |
+| Nonfinancial watch/signal/like/preference receipts | 30 days | Retried transient actions |
+| Money and unclassified legacy command receipts | Retained | Prevent historical money commands being replayed |
 | Watch events | 90 days raw, then aggregate | Ranking needs recency, not history |
 | Moderation cases | 2 years | Appeals and pattern detection |
 
-Audit finding L1: `app.rate_limit`, `app.otp` and `app.command` currently have
-no reaper. That is a real gap — the table above is the target, and a scheduled
-cleanup job is the fix.
+`npm run maintenance` removes expired OTPs, sessions, rate counters, old signalling
+and the explicitly classified nonfinancial receipts. It reports row counts and
+writes an audit event. Run it on an operations schedule; a branch push does not
+install a scheduler. Other retention rows above are production policy targets,
+not implemented automatic deletion jobs.
 
 ## Secrets
 
 - OTP codes are **HMAC'd with a server-side secret**, not bare SHA-256. A
   six-digit code has a 10⁶ keyspace: an unsalted hash is recoverable instantly
-  from a database read. (Audit M2 — open.)
+  from a database read. (Audit M2 — resolved.)
 - Session tokens are 32 random bytes; SHA-256 storage is adequate there because
   the input is high-entropy.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, and **`Secure` by default** —
-  local HTTP requires an explicit opt-out, not the reverse. (Audit M3 — open.)
+  local HTTP requires an explicit opt-out, not the reverse. (Audit M3 — resolved.)
 - No secret is ever committed. `.env.local` is gitignored; `.env.example`
   carries names and shapes only.
 
 ## Access to user data
 
-- No endpoint returns a directory of users the caller has no relationship
-  with. `sessionInfo()` currently returns up to 100 arbitrary accounts — a
-  demo affordance that is also a user-enumeration endpoint (audit M4 — open).
+- `sessionInfo()` supplies only existing follow relationships and conversations,
+  filtering blocked/inactive users. It does not supply arbitrary account lists.
+  The public feed and seller catalog still identify their publishers/businesses.
+- Search hiding is enforced in the feed query. Media, DMs and LIVE also check
+  account state, not just knowledge of an object ID.
 - Media is private by default and served through an authorising route
   (`lib/media.ts` checks ownership, blocks, and published state) rather than a
   guessable public path.

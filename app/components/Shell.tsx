@@ -37,6 +37,7 @@ import {
   Admin,
 } from "./workspace";
 import Live from "./Live";
+import { commandSender } from "../../lib/client-command";
 async function request(path: string, body?: unknown) {
   const r = await fetch(
     `/api/${path}`,
@@ -76,6 +77,9 @@ export default function Shell() {
     [mode, setMode] = useState("for-you"),
     [q, setQ] = useState(""),
     [search, setSearch] = useState(""),
+    [cursor, setCursor] = useState(""),
+    [postId, setPostId] = useState(""),
+    [routeReady, setRouteReady] = useState(false),
     [locale, setLocale] = useState<"bn" | "en">("bn"),
     [init, setInit] = useState(true),
     [loading, setLoading] = useState(false),
@@ -86,6 +90,8 @@ export default function Shell() {
     [bell, setBell] = useState(false),
     [loadError, setLoadError] = useState("");
   const sequence = useRef(0);
+  const sender = useRef(commandSender((body) => request("command", body)));
+  const pending = useRef(0);
   const t = (bn: string, en: string) => (locale === "bn" ? bn : en);
   const money = (n: number) =>
     new Intl.NumberFormat(locale === "bn" ? "bn-BD" : "en-BD", {
@@ -95,11 +101,12 @@ export default function Shell() {
       minimumFractionDigits: 2,
     }).format((Number(n) || 0) / 100);
   const refresh = useCallback(async () => {
+    if (!routeReady) return;
     const seq = ++sequence.current;
     setLoading(true);
     try {
       const d = await request(
-        `data?view=${view}&mode=${mode}&q=${encodeURIComponent(q)}`,
+        `data?view=${view}&mode=${mode}&q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(cursor)}${postId ? `&post=${postId}` : ""}`,
       );
       if (seq !== sequence.current) return;
       setData(d);
@@ -115,14 +122,39 @@ export default function Shell() {
         setLoading(false);
       }
     }
-  }, [view, mode, q]);
+  }, [view, mode, q, cursor, postId, routeReady]);
+  const wroteRoute = useRef(false);
   useEffect(() => {
-    const query = new URLSearchParams(location.search).get("q");
-    if (query) {
-      setQ(query);
-      setSearch(query);
-    }
+    const readRoute = () => {
+      const params = new URLSearchParams(location.search);
+      const v = params.get("view") ?? "feed";
+      setView(nav.some((n) => n[0] === v) ? v : "feed");
+      const m = params.get("mode") ?? "for-you";
+      setMode(["for-you", "following", "pashe"].includes(m) ? m : "for-you");
+      setQ(params.get("q") ?? "");
+      setSearch(params.get("q") ?? "");
+      setCursor(params.get("cursor") ?? "");
+      setPostId(params.get("post") ?? "");
+      setRouteReady(true);
+    };
+    readRoute();
+    window.addEventListener("popstate", readRoute);
+    return () => window.removeEventListener("popstate", readRoute);
   }, []);
+  useEffect(() => {
+    if (!routeReady) return;
+    const params = new URLSearchParams({ view });
+    if (mode !== "for-you") params.set("mode", mode);
+    if (q) params.set("q", q);
+    if (cursor) params.set("cursor", cursor);
+    if (postId) params.set("post", postId);
+    const next = `/?${params}`;
+    if (location.pathname + location.search !== next) {
+      if (wroteRoute.current) history.pushState(null, "", next);
+      else history.replaceState(null, "", next);
+    }
+    wroteRoute.current = true;
+  }, [view, mode, q, cursor, postId, routeReady]);
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -136,13 +168,16 @@ export default function Shell() {
   }, [toast]);
   const act = useCallback(
     async (action: string, values: Row = {}, silent = false) => {
-      if (!silent) setBusy(true);
+      if (!silent) {
+        pending.current++;
+        setBusy(true);
+      }
       try {
-        const result = await request("command", {
+        const result = await sender.current(
+          data?.user.id ?? "anonymous",
           action,
-          data: values,
-          key: crypto.randomUUID(),
-        });
+          values,
+        );
         if (!silent) {
           if (result.message) setToast(result.message);
           await refresh();
@@ -152,13 +187,15 @@ export default function Shell() {
         setToast((e as Error).message);
         throw e;
       } finally {
-        if (!silent) setBusy(false);
+        if (!silent) setBusy(--pending.current > 0);
       }
     },
-    [refresh],
+    [refresh, data?.user.id],
   );
   const go = (v: string) => {
     setView(v);
+    setCursor("");
+    setPostId("");
     setMenu(false);
     setBell(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -286,6 +323,8 @@ export default function Shell() {
               onSubmit={(e) => {
                 e.preventDefault();
                 setQ(search);
+                setCursor("");
+                setPostId("");
                 setMode("for-you");
                 go("feed");
               }}
@@ -413,10 +452,21 @@ export default function Shell() {
                 {view === "feed" && (
                   <Feed
                     mode={mode}
-                    setMode={setMode}
+                    setMode={(m) => {
+                      setMode(m);
+                      setCursor("");
+                      setPostId("");
+                    }}
+                    page={(c) => {
+                      setCursor(c);
+                      setPostId("");
+                      window.scrollTo({ top: 0 });
+                    }}
                     q={q}
                     clearSearch={() => {
                       setQ("");
+                      setCursor("");
+                      setPostId("");
                       setSearch("");
                     }}
                   />

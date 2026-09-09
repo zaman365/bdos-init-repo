@@ -2,7 +2,7 @@ import { authenticate, authAction } from "../../../lib/auth";
 import { readApp, readLive } from "../../../lib/read";
 import { command } from "../../../lib/commands";
 import { upload } from "../../../lib/media";
-import { origin, failure } from "../../../lib/http";
+import { origin, failure, readBody } from "../../../lib/http";
 import { pool, need, sandbox } from "../../../lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,8 +36,7 @@ export async function POST(request: Request, context: Context) {
     const path = (await context.params).path.join("/");
     if (path === "upload")
       return Response.json(await upload(await authenticate(request), request));
-    const body = await request.text();
-    need(body.length <= 100000, "Request too large", 413);
+    const body = await readBody(request);
     const copy = new Request(request.url, {
       method: "POST",
       headers: request.headers,

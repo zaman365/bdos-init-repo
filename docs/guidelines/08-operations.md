@@ -2,7 +2,7 @@
 
 ## Reconciliation
 
-The nightly job asserts `ledger.trial_balance.drift_paisa = 0` and reconciles
+The production nightly job must assert `ledger.trial_balance.drift_paisa = 0` and reconciles
 internal journals against gateway, MFS and courier settlement files. Drift
 pages a human; it is never auto-corrected.
 
@@ -26,10 +26,15 @@ Corrections are **reversing entries**, never edits. The schema enforces this:
 
 ## Runbook essentials
 
-- **Rebuild a database:** `./db/apply.sh bdos_dev`
-- **Verify invariants:** `./db/test.sh` — 17 assertions against real PostgreSQL
+- **Normal application migrations:** `npm run db:migrate` (preserves data)
+- **Explicit local reset:** `./db/apply.sh --reset bdos_dev` (destroys that database)
+- Without `--reset`, `db/apply.sh` only creates a new `bdos_*` database and refuses an existing one.
+- **Verify invariants:** `npm run db:test` — 17 assertions in a unique disposable PostgreSQL database
 - **Verify logic:** `npm test` — money, ledger, ranking packages
-- **Full gate:** `npm run verify` (typecheck + tests + db invariants)
+- **Full gate:** `npm run verify` (typecheck + package/client/integration tests + build)
+- **Browser gate:** `npm run test:e2e` (desktop/mobile, navigation and lost-response recovery)
+- **Maintenance:** `npm run maintenance` clears due commissions, prunes supported
+  transient records and reports/audits affected counts. Financial history is retained.
 - Kill switches exist per surface via `app.flag`. Pausing uploads or checkout
   is a database row, not a deploy.
 

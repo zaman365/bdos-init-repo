@@ -43,6 +43,7 @@ export async function contentCommand(
         filter: z.enum(["off", "standard", "strict"]),
         duet: z.boolean(),
         stitch: z.boolean(),
+        hideSearch: z.boolean().default(false),
       })
       .parse(raw);
     await db.query(
@@ -54,8 +55,8 @@ export async function contentCommand(
       [u.id, d.bio],
     );
     await db.query(
-      `INSERT INTO trust.nirapod_setting(user_id,dm_from,comment_filter,allow_duet,allow_stitch) VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id) DO UPDATE SET dm_from=$2,comment_filter=$3,allow_duet=$4,allow_stitch=$5`,
-      [u.id, d.dm, d.filter, d.duet, d.stitch],
+      `INSERT INTO trust.nirapod_setting(user_id,dm_from,comment_filter,allow_duet,allow_stitch,hide_from_search) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(user_id) DO UPDATE SET dm_from=$2,comment_filter=$3,allow_duet=$4,allow_stitch=$5,hide_from_search=$6,updated_at=now()`,
+      [u.id, d.dm, d.filter, d.duet, d.stitch, d.hideSearch],
     );
     return { message: "Profile and safety settings saved" };
   }
@@ -326,7 +327,7 @@ export async function contentCommand(
     );
     const s = await one(
       db,
-      "SELECT dm_from FROM trust.nirapod_setting WHERE user_id=$1",
+      "SELECT ns.dm_from FROM trust.nirapod_setting ns JOIN identity.user_account u ON u.id=ns.user_id WHERE ns.user_id=$1 AND u.state='active'",
       [d.id],
     );
     need(
@@ -378,20 +379,31 @@ export async function contentCommand(
       .parse(raw);
     const p = await visiblePost(db, u, d.id);
     need(p.author_id !== u.id, "You cannot report yourself");
+    let review = await one(
+      db,
+      "SELECT id FROM trust.moderation_case WHERE post_id=$1 AND category=$2 AND state IN ('open','human_review') ORDER BY opened_at LIMIT 1",
+      [d.id, d.reason],
+    );
+    if (!review)
+      review = await one(
+        db,
+        "INSERT INTO trust.moderation_case(post_id,subject_id,category,severity,requires_human) VALUES($1,$2,$3,$4,true) RETURNING id",
+        [
+          d.id,
+          p.author_id,
+          d.reason,
+          ["minor_safety", "communal_religious"].includes(d.reason)
+            ? "critical"
+            : "medium",
+        ],
+      );
     await db.query(
-      "INSERT INTO trust.report(reporter_id,post_id,subject_id,category,note) VALUES($1,$2,$3,$4,$5)",
-      [u.id, d.id, p.author_id, d.reason, d.note],
+      "INSERT INTO trust.report(reporter_id,post_id,subject_id,category,note,case_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING",
+      [u.id, d.id, p.author_id, d.reason, d.note, review!.id],
     );
     await db.query(
-      `INSERT INTO trust.moderation_case(post_id,subject_id,category,severity,requires_human) VALUES($1,$2,$3,$4,true)`,
-      [
-        d.id,
-        p.author_id,
-        d.reason,
-        ["minor_safety", "communal_religious"].includes(d.reason)
-          ? "critical"
-          : "medium",
-      ],
+      "UPDATE content.post_stats SET reports=(SELECT count(DISTINCT reporter_id) FROM trust.report WHERE post_id=$1) WHERE post_id=$1",
+      [d.id],
     );
     if (d.block)
       await db.query(

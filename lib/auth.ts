@@ -98,19 +98,15 @@ export async function authAction(path: string, request: Request) {
     // A shared limit bounds number rotation without trusting spoofable proxy headers.
     await rate(pool, "otp-global", 100, 600);
     await rate(pool, `otp:${p}`, 5, 600);
-    const old = await one(pool, "SELECT sent_at FROM app.otp WHERE phone=$1", [
-      p,
-    ]);
-    need(
-      !old || Date.now() - new Date(old.sent_at).getTime() > 30000,
-      "Wait 30 seconds before requesting another code",
-      429,
-    );
     const code = String(randomInt(100000, 1000000));
-    await pool.query(
-      `INSERT INTO app.otp(phone,code_hash,expires_at) VALUES($1,$2,now()+interval '5 minutes') ON CONFLICT(phone) DO UPDATE SET code_hash=$2,attempts=0,expires_at=now()+interval '5 minutes',sent_at=now()`,
+    const issued = await one(
+      pool,
+      `INSERT INTO app.otp(phone,code_hash,expires_at) VALUES($1,$2,now()+interval '5 minutes')
+       ON CONFLICT(phone) DO UPDATE SET code_hash=$2,attempts=0,expires_at=now()+interval '5 minutes',sent_at=now()
+       WHERE app.otp.sent_at<=now()-interval '30 seconds' RETURNING phone`,
       [p, otpHash(p, code)],
     );
+    need(issued, "Wait 30 seconds before requesting another code", 429);
     await smsProvider().sendOtp(p, code);
     return Response.json({
       ok: true,
@@ -211,7 +207,7 @@ export async function sessionInfo(u: User) {
     sandbox: sandbox(),
     people: await rows(
       pool,
-      `SELECT id,handle,display_name FROM identity.user_account WHERE state='active' AND id<>$1 AND NOT EXISTS(SELECT 1 FROM app.block WHERE (user_id=$1 AND target_id=identity.user_account.id) OR (target_id=$1 AND user_id=identity.user_account.id)) ORDER BY display_name LIMIT 100`,
+      `SELECT id,handle,display_name FROM identity.user_account WHERE state='active' AND id<>$1 AND (EXISTS(SELECT 1 FROM content.follow f WHERE (f.follower_id=$1 AND f.followee_id=identity.user_account.id) OR (f.followee_id=$1 AND f.follower_id=identity.user_account.id)) OR EXISTS(SELECT 1 FROM app.message m WHERE (m.sender_id=$1 AND m.recipient_id=identity.user_account.id) OR (m.recipient_id=$1 AND m.sender_id=identity.user_account.id))) AND NOT EXISTS(SELECT 1 FROM app.block WHERE (user_id=$1 AND target_id=identity.user_account.id) OR (target_id=$1 AND user_id=identity.user_account.id)) ORDER BY display_name LIMIT 100`,
       [u.id],
     ),
   };

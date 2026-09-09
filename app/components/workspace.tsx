@@ -922,6 +922,16 @@ export function Ads() {
             <article className="list-item" key={c.post_id + c.seller_id}>
               <strong>{c.trade_name}</strong>
               <p>{c.caption}</p>
+              <small>
+                {c.report_count} report(s) · opened{" "}
+                {new Date(c.opened_at).toLocaleString()}
+                {c.overdue ? " · Critical review overdue" : ""}
+              </small>
+              {c.evidence?.map((e: Row, i: number) => (
+                <blockquote key={i}>
+                  {e.note || "No additional details supplied"}
+                </blockquote>
+              ))}
               <button
                 className="text-button"
                 onClick={() =>
@@ -973,6 +983,7 @@ export function Profile() {
               filter: f.get("filter"),
               duet: f.get("duet") === "on",
               stitch: f.get("stitch") === "on",
+              hideSearch: f.get("hideSearch") === "on",
             }).catch(() => {});
           }}
         >
@@ -1027,6 +1038,12 @@ export function Profile() {
             ["dataSaver", "ডেটা সেভার", "Data Saver", data.user.data_saver],
             ["duet", "Duet অনুমতি", "Allow Duet", s.allow_duet],
             ["stitch", "Stitch অনুমতি", "Allow Stitch", s.allow_stitch],
+            [
+              "hideSearch",
+              "খোঁজার ফল থেকে আড়াল করো",
+              "Hide my stories from search",
+              s.hide_from_search,
+            ],
           ].map(([name, bn, en, value]) => (
             <label className="checkbox-label" key={String(name)}>
               <input
@@ -1130,7 +1147,7 @@ export function Inbox() {
               modal({
                 title: t("নতুন মেসেজ", "New message"),
                 description:
-                  "The recipient’s DM permissions apply. New accounts have DMs off by default.",
+                  "Follow a creator to add them here. Only existing follows and conversations appear; recipient DM permissions still apply.",
                 fields: [
                   {
                     name: "id",
@@ -1277,7 +1294,11 @@ export function Admin() {
             note: "Internal balance only; not bank reconciliation",
           },
           { label: "Posted journals", value: data.trial?.entries ?? 0 },
-          { label: "Safety queue", value: cases.length },
+          {
+            label: "Safety queue",
+            value: data.safetySummary?.pending ?? cases.length,
+            note: `${data.safetySummary?.overdue ?? 0} overdue critical cases`,
+          },
           {
             label: "Pending reviews",
             value:

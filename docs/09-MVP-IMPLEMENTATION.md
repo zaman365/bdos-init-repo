@@ -1,5 +1,9 @@
 # MVP implementation and verification record
 
+This records the initial delivery at `556175b`. See
+[the subsequent branch audit and improvements](10-BRANCH-AUDIT-IMPROVEMENT-PLAN.md)
+for the current state and expanded verification.
+
 9 September 2026. This record follows the snapshot audit in `08-SYSTEM-AUDIT.md`;
 that audit describes an earlier, partially written tree, not the delivered state.
 

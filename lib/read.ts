@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { adToken } from "./providers";
 import { type User, sessionInfo, hasRole, adult, blocked } from "./auth";
 import { pool, one, rows, need, type Row } from "./db";
@@ -7,7 +8,23 @@ const productSql = `SELECT p.*,s.trade_name,s.bharosha,s.owner_id,c.commission_b
  EXISTS(SELECT 1 FROM affiliate.showcase sh WHERE sh.product_id=p.id AND sh.creator_id=$1) showcased
  FROM commerce.product p JOIN identity.seller s ON s.id=p.seller_id JOIN commerce.category c ON c.id=p.category_id`;
 export async function readApp(u: User, url: URL) {
-  const view = url.searchParams.get("view") ?? "feed";
+  const view = z
+    .enum([
+      "feed",
+      "cut",
+      "shop",
+      "orders",
+      "seller",
+      "studio",
+      "affiliate",
+      "ads",
+      "profile",
+      "inbox",
+      "live",
+      "partner",
+      "admin",
+    ])
+    .parse(url.searchParams.get("view") ?? "feed");
   const base: Row = {
     _view: view,
     ...(await sessionInfo(u)),
@@ -43,25 +60,70 @@ export async function readApp(u: User, url: URL) {
     [u.id],
   );
   if (view === "feed" || view === "cut") {
-    const mode = url.searchParams.get("mode") ?? "for-you";
+    const mode = z
+      .enum(["for-you", "following", "pashe"])
+      .parse(url.searchParams.get("mode") ?? "for-you");
+    const postId = z
+      .string()
+      .uuid()
+      .nullable()
+      .parse(url.searchParams.get("post"));
+    let cursor: { at: string; id: string } | null = null;
+    const encodedCursor = url.searchParams.get("cursor");
+    if (encodedCursor) {
+      need(encodedCursor.length < 300, "Invalid feed cursor");
+      try {
+        cursor = z
+          .object({
+            at: z.string().datetime({ offset: true }),
+            id: z.string().uuid(),
+          })
+          .parse(
+            JSON.parse(Buffer.from(encodedCursor, "base64url").toString()),
+          );
+      } catch {
+        need(false, "Invalid feed cursor");
+      }
+    }
     const terms = searchTerms(url.searchParams.get("q") ?? "");
     const posts = await rows(
       pool,
-      `SELECT p.*,u.handle,u.display_name,coalesce(st.plays,0) plays,coalesce(st.likes,0) likes,coalesce(st.comments,0) comments,coalesce(st.completions,0) completions,coalesce(st.reports,0) reports,coalesce(a.served_impressions,0) served_impressions,coalesce(a.guaranteed_impressions,500) guaranteed_impressions,m.mime,
+      `SELECT p.*,to_char(p.published_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') cursor_time,u.handle,u.display_name,coalesce(st.plays,0) plays,coalesce(st.likes,0) likes,coalesce(st.comments,0) comments,coalesce(st.completions,0) completions,coalesce(st.reports,0) reports,coalesce(a.served_impressions,0) served_impressions,coalesce(a.guaranteed_impressions,500) guaranteed_impressions,m.mime,
    EXISTS(SELECT 1 FROM content.follow f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) following,
    EXISTS(SELECT 1 FROM content.reaction r WHERE r.user_id=$1 AND r.post_id=p.id) liked,
    coalesce((SELECT json_agg(pp.product_id) FROM commerce.post_product pp WHERE pp.post_id=p.id),'[]') product_ids,
-   (SELECT json_agg(json_build_object('id',c.id,'user_id',c.user_id,'body',c.body,'pinned',c.pinned,'name',cu.display_name) ORDER BY c.pinned DESC,c.created_at) FROM content.comment c JOIN identity.user_account cu ON cu.id=c.user_id WHERE c.post_id=p.id AND NOT EXISTS(SELECT 1 FROM app.block b WHERE (b.user_id=$1 AND b.target_id=c.user_id) OR (b.target_id=$1 AND b.user_id=c.user_id))) comment_list,
+   (SELECT json_agg(cl ORDER BY cl.pinned DESC,cl.created_at DESC) FROM (SELECT c.id,c.user_id,c.body,c.pinned,cu.display_name name,c.created_at FROM content.comment c JOIN identity.user_account cu ON cu.id=c.user_id WHERE c.post_id=p.id AND cu.state='active' AND NOT EXISTS(SELECT 1 FROM app.block b WHERE (b.user_id=$1 AND b.target_id=c.user_id) OR (b.target_id=$1 AND b.user_id=c.user_id)) ORDER BY c.pinned DESC,c.created_at DESC,c.id LIMIT 30) cl) comment_list,
    ns.allow_duet,ns.allow_stitch
    FROM content.post p JOIN identity.user_account u ON u.id=p.author_id LEFT JOIN content.post_stats st ON st.post_id=p.id LEFT JOIN content.audition a ON a.post_id=p.id LEFT JOIN app.media m ON m.id=p.media_id LEFT JOIN trust.nirapod_setting ns ON ns.user_id=p.author_id
    WHERE p.state='published' AND u.state='active' AND NOT EXISTS(SELECT 1 FROM app.block b WHERE (b.user_id=$1 AND b.target_id=p.author_id) OR (b.target_id=$1 AND b.user_id=p.author_id))
    AND ($2='for-you' OR EXISTS(SELECT 1 FROM content.follow f WHERE f.follower_id=$1 AND f.followee_id=p.author_id))
    AND ($2<>'pashe' OR EXISTS(SELECT 1 FROM content.follow f WHERE f.followee_id=$1 AND f.follower_id=p.author_id))
    AND (EXISTS(SELECT 1 FROM unnest($3::text[]) term WHERE lower(coalesce(p.caption,'')||' '||u.handle||' '||u.display_name) LIKE '%'||term||'%'))
-   ORDER BY p.published_at DESC LIMIT 60`,
-      [u.id, mode, terms],
+   AND ($4::timestamptz IS NULL OR (p.published_at,p.id)<($4::timestamptz,$5::uuid))
+   AND ($6::uuid IS NULL OR p.id=$6)
+   AND ($7::boolean=false OR NOT coalesce(ns.hide_from_search,false) OR p.author_id=$1)
+   ORDER BY p.published_at DESC,p.id DESC LIMIT 61`,
+      [
+        u.id,
+        mode,
+        terms,
+        postId ? null : (cursor?.at ?? null),
+        cursor?.id ?? null,
+        postId,
+        terms[0].length > 0,
+      ],
     );
-    base.posts = rank(posts as any);
+    const page = posts.slice(0, 60);
+    const last = page.at(-1);
+    base.nextCursor =
+      !postId && posts.length > 60 && last
+        ? Buffer.from(
+            JSON.stringify({ at: last.cursor_time, id: last.id }),
+          ).toString("base64url")
+        : null;
+    base.feedCursor = encodedCursor ?? "";
+    base.sharedPost = postId;
+    base.posts = rank(page as any);
     base.ads = [];
     if (
       view === "feed" &&
@@ -138,7 +200,7 @@ export async function readApp(u: User, url: URL) {
     base.kyc =
       (await one(
         pool,
-        "SELECT id,state,created_at FROM identity.kyc_record WHERE subject_id=$1 ORDER BY created_at DESC LIMIT 1",
+        "SELECT id,state,created_at FROM identity.kyc_record WHERE subject_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1",
         [u.id],
       )) ?? null;
     base.lessons = await rows(
@@ -157,7 +219,7 @@ export async function readApp(u: User, url: URL) {
   if (view === "live") {
     base.rooms = await rows(
       pool,
-      "SELECT s.*,u.display_name,u.handle FROM live.session s JOIN identity.user_account u ON u.id=s.host_id WHERE s.state='live' AND NOT EXISTS(SELECT 1 FROM app.block b WHERE (b.user_id=$1 AND b.target_id=s.host_id) OR (b.target_id=$1 AND b.user_id=s.host_id)) ORDER BY s.started_at DESC",
+      "SELECT s.*,u.display_name,u.handle FROM live.session s JOIN identity.user_account u ON u.id=s.host_id WHERE s.state='live' AND u.state='active' AND NOT EXISTS(SELECT 1 FROM app.block b WHERE (b.user_id=$1 AND b.target_id=s.host_id) OR (b.target_id=$1 AND b.user_id=s.host_id)) ORDER BY s.started_at DESC",
       [u.id],
     );
     base.gifts = await rows(
@@ -227,7 +289,15 @@ export async function readApp(u: User, url: URL) {
     );
     base.cases = await rows(
       pool,
-      `SELECT c.*,u.display_name,p.caption,(SELECT statement FROM trust.appeal WHERE case_id=c.id) appeal_statement FROM trust.moderation_case c JOIN identity.user_account u ON u.id=c.subject_id LEFT JOIN content.post p ON p.id=c.post_id ORDER BY c.opened_at DESC LIMIT 100`,
+      `SELECT c.*,u.display_name,p.caption,
+        (SELECT count(*) FROM trust.report r WHERE r.case_id=c.id OR r.case_id IS NULL AND r.post_id=c.post_id AND r.category=c.category) report_count,
+        (SELECT json_agg(e) FROM (SELECT r.category,r.note,r.created_at FROM trust.report r WHERE r.case_id=c.id OR r.case_id IS NULL AND r.post_id=c.post_id AND r.category=c.category ORDER BY r.created_at DESC LIMIT 20) e) evidence,
+        (c.severity='critical' AND c.state IN ('open','human_review','appealed') AND c.opened_at<now()-interval '15 minutes') overdue,
+        (SELECT statement FROM trust.appeal WHERE case_id=c.id) appeal_statement FROM trust.moderation_case c JOIN identity.user_account u ON u.id=c.subject_id LEFT JOIN content.post p ON p.id=c.post_id ORDER BY (c.state IN ('open','human_review','appealed')) DESC,(c.severity='critical') DESC,(c.severity='high') DESC,c.opened_at,c.id LIMIT 100`,
+    );
+    base.safetySummary = await one(
+      pool,
+      "SELECT count(*) FILTER(WHERE state IN ('open','human_review','appealed')) pending,count(*) FILTER(WHERE severity='critical' AND state IN ('open','human_review','appealed') AND opened_at<now()-interval '15 minutes') overdue FROM trust.moderation_case",
     );
     base.pendingSellers = await rows(
       pool,
@@ -235,7 +305,7 @@ export async function readApp(u: User, url: URL) {
     );
     base.pendingKyc = await rows(
       pool,
-      "SELECT k.id,k.state,u.display_name FROM identity.kyc_record k JOIN identity.user_account u ON u.id=k.subject_id WHERE k.state='submitted'",
+      "SELECT k.id,k.state,u.display_name FROM identity.kyc_record k JOIN identity.user_account u ON u.id=k.subject_id WHERE k.state='submitted' AND k.id=(SELECT id FROM identity.kyc_record WHERE subject_id=k.subject_id ORDER BY created_at DESC,id DESC LIMIT 1)",
     );
     base.pendingCampaigns = await rows(
       pool,
@@ -256,7 +326,11 @@ export async function readLive(u: User, url: URL) {
   adult(u);
   const id = url.searchParams.get("id");
   need(id && /^[0-9a-f-]{36}$/i.test(id), "Invalid room");
-  const s = await one(pool, "SELECT * FROM live.session WHERE id=$1", [id]);
+  const s = await one(
+    pool,
+    "SELECT s.* FROM live.session s JOIN identity.user_account u ON u.id=s.host_id WHERE s.id=$1 AND u.state='active'",
+    [id],
+  );
   need(s && !(await blocked(pool, u.id, s.host_id)), "Room unavailable", 404);
   const after = Math.max(0, Number(url.searchParams.get("after")) || 0);
   return {

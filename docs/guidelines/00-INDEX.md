@@ -34,6 +34,7 @@ who finds it inconvenient.
 
 ## Status of the codebase against these guidelines
 
-See [../08-SYSTEM-AUDIT.md](../08-SYSTEM-AUDIT.md) for the current gap list.
-The foundations (schema, money, ledger, ranking) comply and are tested. The
-application layer and UI do not yet.
+See [the branch audit and improvement plan](../10-BRANCH-AUDIT-IMPROVEMENT-PLAN.md)
+for the current implementation and verification record. The earlier system audit
+is a historical snapshot. The web MVP has working screens and tested application
+workflows; the plan identifies separate production launch dependencies.

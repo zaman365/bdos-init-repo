@@ -1,6 +1,6 @@
 # BDOS MVP User Manual
 
-**Version:** 1.0 · **9 September 2026** · **Branch:** `codex/ecosystem-mvp`
+**Version:** 1.1 · **9 September 2026** · **Branch:** `codex/ecosystem-mvp`
 
 BDOS — Bangladesh On Stage. **দেখো · কিনো · কামাও — Watch · Buy · Earn.**
 
@@ -91,7 +91,8 @@ use separate browser profiles or an incognito window because sessions are cookie
 ## 3. Navigation, language and data
 
 The sidebar contains all available surfaces. On a phone, open it with the menu
-button. Partner and Operations appear only for authorised roles.
+button. Partner and Operations appear only for authorised roles. Module navigation
+is reflected in the URL and survives reloads; browser Back/Forward restores it.
 
 Bangla is the default. The **EN / বাংলা** button changes language and number
 formatting and saves the preference to your account. Primary user flows are
@@ -117,20 +118,22 @@ records remain available even when their notification is suppressed.
 - The plus/check beside a creator follows or unfollows them. Heart reactions
   toggle once per account. Open comments to write a respectful response.
 - Authors can pin and unpin comments on their own posts.
-- Share copies a link that reopens the corresponding caption search.
+- Share copies a stable link to that exact published story. Removed or blocked stories remain inaccessible.
+- **Older stories** opens the next page; **Latest stories** returns to the newest. Pages contain up to 60 ranked stories. Comments show up to 30 pinned/recent entries.
 - A product bar opens variant and quantity selection. Adding it to the cart
   records the product click used for affiliate attribution.
 
 Blocked accounts disappear from the feed and cannot contact each other.
 Drafts and removed posts cannot be viewed through the public media endpoint.
-The initial feed and product catalog are capped for this small MVP; pagination,
-large-scale search and offline downloads are future work.
+The product catalog and some workspace lists remain capped for this small MVP.
+Large-scale search and offline downloads are future work.
 
 ## 5. BDOS Cut
 
 1. Open **BDOS Cut** or **Create a story**.
 2. Upload PNG, JPEG, WebP, MP4 or WebM, up to **20 MB**. Uploads are validated by
-   file signatures. Videos are transcoded to H.264/AAC MP4 with streaming metadata.
+   file signatures. Images are fully decoded (up to 24 megapixels), stripped of
+   metadata and converted to WebP within 1920×1920. Videos are transcoded to H.264/AAC MP4 with streaming metadata.
 3. Choose Original, Product story, or Day in my life. Add a caption and optional
    on-screen text. The templates change presentation; they do not generate footage.
 4. For video, enter start/end seconds to control the playback window. The source
@@ -190,7 +193,10 @@ must approve the application before products or campaigns can be created.
 
 - **Catalog:** list or edit a product with Bangla and English titles, category,
   description, default variant, price, stock, and cover artwork. Add more variants
-  with **+ Variant**. Pausing a listing removes it from the public catalog.
+  with **+ Variant**, then use **Edit variant** beside any variant to update its
+  label, price or available stock. If an order or another editor changed stock,
+  the form asks you to refresh and reopen it. Pausing a listing removes it from
+  the public catalog; buyers can still remove it from their carts.
 - **Orders:** dispatch only after buyer confirmation. Choose a courier to create
   a `SANDBOX-…` tracking reference. The adapter simulates the courier; it does not
   contact Pathao, Steadfast or the other displayed services.
@@ -293,12 +299,18 @@ restart the camera, or end it explicitly. Messages and gifts do not restart the 
 ## 11. Nirapod and operations
 
 New accounts have DMs off, strict comment filtering, and Duet/Stitch disabled.
-Change these in **Profile & Nirapod**. The MVP’s comment/chat filter uses a small
+Change these in **Profile & Nirapod**. **Hide my stories from search** removes your
+stories from other users' search results; it does not make published stories private.
+The Inbox recipient picker shows only existing follows/conversations. Follow a
+creator first to add them; their message permissions still apply. The MVP’s comment/chat filter uses a small
 explicit phrase list; it is not a trained multilingual safety classifier.
 
 Use the flag on a post to report it. **Also block this creator** hides their
 content and prevents interaction. Unblock in your profile. A report opens a
-human review case. Critical categories are labelled for priority review; a real
+human review case. Repeated reports by the same account are deduplicated within
+an open case; other reporters' evidence is grouped into it. Operations sees
+unresolved critical cases first, their evidence, and a 15-minute overdue indicator.
+A real
 24/7 escalation organisation is not supplied by the software.
 
 Operations can remove or dismiss a case with both Bangla and English reasons.
@@ -347,6 +359,8 @@ does not automatically create a seller or pay agency revenue shares.
 ```sh
 npm run typecheck
 npm test                  # money, ledger and ranking
+npm run test:client       # request limits and retry safety
+npm run db:test           # unique disposable DB invariant checks
 npm run test:integration   # disposable DB: financial, permission and media tests
 npm run build
 npm run test:e2e           # browser suite; install Chromium first
@@ -374,7 +388,13 @@ Never point tests at a real customer database.
 
 Back up PostgreSQL **and** the media directory together. Keep financial journals,
 idempotency receipts and audit history. Maintenance removes expired sessions,
-old OTP/rate-limit rows and old signalling records, not money history.
+old OTP/rate-limit rows, old signalling and explicitly classified nonfinancial
+command receipts, not money history. It reports the deleted counts in its output
+and audit log. Use an operations scheduler to run it regularly.
+
+If a command response is lost, the browser retries once with the same receipt key.
+An uncertain retry retains that key in session storage; the address/message itself
+is not stored there. Refreshing and retrying cannot duplicate that same command.
 
 Outside sandbox, authentication supports a configurable HTTPS SMS adapter
 (`SMS_WEBHOOK_URL`, `SMS_WEBHOOK_TOKEN`, and a 32+ character `AUTH_SECRET`). The

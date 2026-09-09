@@ -229,6 +229,15 @@ export async function creatorCommand(
   if (action === "kyc-submit") {
     adult(u);
     requireSandbox();
+    const current = await one(
+      db,
+      "SELECT id,state FROM identity.kyc_record WHERE subject_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1",
+      [u.id],
+    );
+    if (current?.state === "submitted")
+      return { id: current.id, message: "Identity review is already pending" };
+    if (current?.state === "verified")
+      return { id: current.id, message: "Identity is already verified" };
     await db.query(
       "INSERT INTO identity.kyc_record(subject_id,vault_ref) VALUES($1,$2)",
       [u.id, `sandbox-review:${randomUUID()}`],
@@ -252,7 +261,7 @@ export async function creatorCommand(
     need(
       await one(
         db,
-        "SELECT 1 FROM identity.kyc_record WHERE subject_id=$1 AND state='verified'",
+        "SELECT 1 FROM (SELECT state FROM identity.kyc_record WHERE subject_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1) latest WHERE state='verified'",
         [u.id],
       ),
       "Identity verification is required before withdrawal",
@@ -384,7 +393,7 @@ export async function creatorCommand(
     const id = uuid.parse(raw.id);
     const s = await one(
       db,
-      "SELECT * FROM live.session WHERE id=$1 AND state='live'",
+      "SELECT s.* FROM live.session s JOIN identity.user_account u ON u.id=s.host_id WHERE s.id=$1 AND s.state='live' AND u.state='active'",
       [id],
     );
     need(s, "This room has ended", 409);
@@ -527,6 +536,16 @@ export async function creatorCommand(
       ]),
       "This brief belongs to another seller",
       403,
+    );
+    const brief = await one(
+      db,
+      "SELECT state FROM app.brief WHERE id=$1 FOR UPDATE",
+      [d.id],
+    );
+    need(
+      brief?.state === "open",
+      "This brief already has a selected creator",
+      409,
     );
     need(
       await one(

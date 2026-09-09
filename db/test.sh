@@ -7,11 +7,12 @@
 #
 #   ./db/test.sh
 set -uo pipefail
-DB=bdos_test
+DB="bdos_test_$$_$(date +%s)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 pass=0; fail=0
 
-"$HERE/apply.sh" "$DB" >/dev/null 2>&1
+if ! "$HERE/apply.sh" "$DB" >/dev/null; then exit 1; fi
+trap 'dropdb --if-exists "$DB" >/dev/null' EXIT
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f "$HERE/fixtures.sql" >/dev/null
 
 # expect_reject <name> <error fragment> <<< sql
@@ -162,5 +163,4 @@ EOF
 
 echo ""
 printf '── %d passed, %d failed ─────────────────────────────────────\n' "$pass" "$fail"
-dropdb --if-exists "$DB" >/dev/null 2>&1
 [ "$fail" -eq 0 ]

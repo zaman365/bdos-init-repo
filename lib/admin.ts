@@ -72,7 +72,7 @@ export async function adminCommand(
     need(
       await one(
         db,
-        "UPDATE identity.kyc_record SET state=$2,decided_at=now() WHERE id=$1 AND state='submitted' RETURNING id",
+        "UPDATE identity.kyc_record SET state=$2,decided_at=now() WHERE id=$1 AND state='submitted' AND id=(SELECT latest.id FROM identity.kyc_record latest WHERE latest.subject_id=identity.kyc_record.subject_id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) RETURNING id",
         [d.id, d.approve ? "verified" : "rejected"],
       ),
       "Review unavailable",

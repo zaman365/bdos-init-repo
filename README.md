@@ -42,8 +42,8 @@ npm run maintenance # Clear due commissions and remove expired transient records
 ```
 
 Tests require a disposable PostgreSQL database and `CREATEDB` permission.
-`db:migrate` is non-destructive and checksum-checked. The legacy `db:apply` script
-resets a database and is not the normal application setup path.
+`db:migrate` is non-destructive and checksum-checked. The legacy `db:apply` script creates a dedicated local database; resetting an
+existing one requires explicit `./db/apply.sh --reset bdos_dev`.
 
 ## Repository map
 
@@ -63,7 +63,8 @@ resets a database and is not the normal application setup path.
 
 Start with [the MVP documentation audit](docs/07-MVP-AUDIT.md),
 [the earlier system audit](docs/08-SYSTEM-AUDIT.md), and
-[the implementation and verification record](docs/09-MVP-IMPLEMENTATION.md).
+[the implementation and verification record](docs/09-MVP-IMPLEMENTATION.md), and
+[the branch audit and improvement plan](docs/10-BRANCH-AUDIT-IMPROVEMENT-PLAN.md).
 The original [ecosystem](docs/02-bdos-product-ecosystem.md),
 [architecture](docs/03-architecture-and-stack.md),
 [brand](docs/04-brand-system.md) and [roadmap](docs/06-roadmap-org-economics.md)

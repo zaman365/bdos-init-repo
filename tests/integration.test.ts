@@ -763,3 +763,455 @@ test("video upload transcodes and media range/visibility controls work", async (
     /Use a PNG/,
   );
 });
+
+// Branch-audit regressions: each fixture is synthetic and isolated from demo flows.
+test("audit: unrelated accounts are excluded from the contact picker", async () => {
+  const d = await view("rifat", "inbox");
+  assert.ok(d.people.some((p: any) => p.id === users.nusrat.id));
+  assert.equal(
+    d.people.some((p: any) => p.id === users.operations.id),
+    false,
+    "Unrelated operations account must not be listed",
+  );
+});
+test("audit: a paused listing can always be removed from the cart", async () => {
+  await call("rifat", "cart", { skuId: sku.id, qty: 1 });
+  await pool.query("UPDATE commerce.product SET is_active=false WHERE id=$1", [
+    product.id,
+  ]);
+  try {
+    await call("rifat", "cart", { skuId: sku.id, qty: 0 });
+    assert.equal((await view("rifat", "shop")).cart.length, 0);
+  } finally {
+    await pool.query("UPDATE commerce.product SET is_active=true WHERE id=$1", [
+      product.id,
+    ]);
+  }
+});
+test("audit: one reporter cannot create duplicate safety cases", async () => {
+  const p = await call("nusrat", "post", {
+    caption: "Audit report fixture",
+    template: "original",
+    publish: true,
+  });
+  await call("rifat", "report", { id: p.id, reason: "spam", block: false });
+  await call("rifat", "report", { id: p.id, reason: "spam", block: false });
+  assert.equal(
+    (await one(pool, "SELECT count(*) n FROM trust.report WHERE post_id=$1", [
+      p.id,
+    ]))!.n,
+    1,
+  );
+  assert.equal(
+    (await one(
+      pool,
+      "SELECT count(*) n FROM trust.moderation_case WHERE post_id=$1",
+      [p.id],
+    ))!.n,
+    1,
+  );
+});
+test("audit: concurrent OTP requests issue only one active code", async () => {
+  const phone = "+8801899999988";
+  // Delay INSERT so both baseline preflight reads complete before either write.
+  await pool.query(
+    "CREATE FUNCTION app.audit_slow_otp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.1); RETURN NEW; END $$; CREATE TRIGGER audit_slow_otp BEFORE INSERT ON app.otp FOR EACH ROW EXECUTE FUNCTION app.audit_slow_otp()",
+  );
+  const results = await Promise.allSettled(
+    Array.from({ length: 2 }, () =>
+      authAction(
+        "auth/request",
+        new Request("http://test", {
+          method: "POST",
+          body: JSON.stringify({ phone }),
+        }),
+      ),
+    ),
+  );
+  await pool.query(
+    "DROP TRIGGER audit_slow_otp ON app.otp; DROP FUNCTION app.audit_slow_otp()",
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+});
+test("audit: stale catalog writes cannot overwrite reserved stock and variants are editable", async () => {
+  const values = {
+    title: "Audit inventory",
+    titleBn: "পরীক্ষার পণ্য",
+    description: "Synthetic inventory fixture",
+    category: 1,
+    price: 12000,
+    stock: 10,
+    variant: "Default",
+    active: true,
+  };
+  const p = await call("bogurashop", "product", values);
+  const initial = await one(
+    pool,
+    "SELECT * FROM commerce.sku WHERE product_id=$1",
+    [p.id],
+  );
+  await call("rifat", "cart", { skuId: initial!.id, qty: 1 });
+  const placed = await call("rifat", "checkout", {
+    method: "cod",
+    address: "Synthetic house 7, Test Road, Dhaka",
+    district: "Dhaka",
+  });
+  await assert.rejects(
+    call("bogurashop", "product", {
+      ...values,
+      id: p.id,
+      version: 0,
+      skuVersion: initial!.version,
+    }),
+    /changed/,
+  );
+  assert.equal(
+    (await one(pool, "SELECT stock FROM commerce.sku WHERE id=$1", [
+      initial!.id,
+    ]))!.stock,
+    9,
+  );
+  await call("bogurashop", "sku", {
+    productId: p.id,
+    label: "Blue",
+    price: 13000,
+    stock: 4,
+  });
+  const blue = await one(
+    pool,
+    "SELECT * FROM commerce.sku WHERE product_id=$1 AND variant_label='Blue'",
+    [p.id],
+  );
+  await call("bogurashop", "sku", {
+    id: blue!.id,
+    productId: p.id,
+    version: blue!.version,
+    label: "Deep blue",
+    price: 14000,
+    stock: 6,
+  });
+  await assert.rejects(
+    call("bogurashop", "sku", {
+      id: blue!.id,
+      productId: p.id,
+      version: blue!.version,
+      label: "Stale",
+      price: 13000,
+      stock: 4,
+    }),
+    /changed/,
+  );
+  await assert.rejects(
+    call("shakib", "sku", {
+      id: blue!.id,
+      productId: p.id,
+      version: 1,
+      label: "Other owner",
+      price: 13000,
+      stock: 4,
+    }),
+    /approved seller/,
+  );
+  await call("rifat", "order", { id: placed.ids[0], step: "cancel" });
+  await call("rifat", "cart", { skuId: initial!.id, qty: 1 });
+  await call("operations", "admin-flag", { name: "commerce", enabled: false });
+  try {
+    await call("rifat", "cart", { skuId: initial!.id, qty: 0 });
+  } finally {
+    await call("operations", "admin-flag", { name: "commerce", enabled: true });
+  }
+});
+test("audit: valid images lose metadata and corrupt signatures are rejected; suspended authors stay private", async () => {
+  const sharp = (await import("sharp")).default;
+  const { upload, mediaResponse } = await import("../lib/media");
+  const send = (bytes: Uint8Array) => {
+    const f = new FormData();
+    f.append(
+      "file",
+      new File([bytes as Uint8Array<ArrayBuffer>], "photo.png", {
+        type: "image/png",
+      }),
+    );
+    return upload(
+      users.bogurashop,
+      new Request("http://test", { method: "POST", body: f }),
+    );
+  };
+  await assert.rejects(
+    send(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])),
+    /could not be decoded/,
+  );
+  const bytes = await sharp({
+    create: { width: 32, height: 24, channels: 3, background: "green" },
+  })
+    .withExif({ IFD0: { Artist: "Synthetic author" } })
+    .png()
+    .toBuffer();
+  assert.ok((await sharp(bytes).metadata()).exif, "Fixture contains metadata");
+  const m = await send(bytes);
+  assert.equal(m.mime, "image/webp");
+  await call("bogurashop", "post", {
+    caption: "Audit image fixture",
+    template: "original",
+    mediaId: m.id,
+    publish: true,
+  });
+  const response = await mediaResponse(
+    users.shakib,
+    m.id,
+    new Request("http://test"),
+  );
+  const metadata = await sharp(
+    Buffer.from(await response.arrayBuffer()),
+  ).metadata();
+  assert.equal(metadata.width, 32);
+  assert.equal(metadata.exif, undefined);
+  await pool.query(
+    "UPDATE identity.user_account SET state='suspended' WHERE id=$1",
+    [users.bogurashop.id],
+  );
+  try {
+    await assert.rejects(
+      mediaResponse(users.shakib, m.id, new Request("http://test")),
+      /Media not found/,
+    );
+    await assert.rejects(
+      call("bogurashop", "preference", { locale: "en" }),
+      /restricted/,
+    );
+  } finally {
+    await pool.query(
+      "UPDATE identity.user_account SET state='active' WHERE id=$1",
+      [users.bogurashop.id],
+    );
+  }
+});
+test("audit: search privacy and inactive DM/LIVE participants are enforced", async () => {
+  await call("nusrat", "profile", {
+    name: "Nusrat",
+    bio: "",
+    locale: "en",
+    dataSaver: true,
+    dm: "everyone",
+    filter: "strict",
+    duet: true,
+    stitch: true,
+    hideSearch: true,
+  });
+  const hidden = await view("shakib", "feed", "&q=jamdani");
+  assert.equal(
+    hidden.posts.some((p: any) => p.author_id === users.nusrat.id),
+    false,
+  );
+  const room = await call("nusrat", "live-start", {
+    title: "Audit private room",
+  });
+  await pool.query(
+    "UPDATE identity.user_account SET state='suspended' WHERE id=$1",
+    [users.nusrat.id],
+  );
+  try {
+    await assert.rejects(
+      call("shakib", "message", { id: users.nusrat.id, body: "Hello" }),
+      /does not accept/,
+    );
+    const { readLive } = await import("../lib/read");
+    await assert.rejects(
+      readLive(users.shakib, new URL(`http://test?id=${room.id}`)),
+      /Room unavailable/,
+    );
+    assert.equal(
+      (await view("shakib", "live")).rooms.some((r: any) => r.id === room.id),
+      false,
+    );
+  } finally {
+    await pool.query(
+      "UPDATE identity.user_account SET state='active' WHERE id=$1",
+      [users.nusrat.id],
+    );
+  }
+  await call("nusrat", "live-end", { id: room.id });
+});
+test("audit: older feed pages are reachable, exact post links work, and comments are bounded", async () => {
+  const prefix = `Pagination ${randomUUID()}`;
+  await pool.query(
+    "INSERT INTO content.post(author_id,kind,state,caption,published_at) SELECT $1,'photo_carousel','published',$2||' '||g,now()-g*interval '1 second' FROM generate_series(1,70) g",
+    [users.shakib.id, prefix],
+  );
+  const first = await view("rifat", "feed", `&q=${encodeURIComponent(prefix)}`);
+  assert.equal(first.posts.length, 60);
+  assert.ok(first.nextCursor, "Older stories have a cursor");
+  const second = await view(
+    "rifat",
+    "feed",
+    `&q=${encodeURIComponent(prefix)}&cursor=${first.nextCursor}`,
+  );
+  assert.equal(second.posts.length, 10);
+  assert.equal(second.nextCursor, null);
+  assert.equal(
+    new Set([...first.posts, ...second.posts].map((p) => p.id)).size,
+    70,
+  );
+  const id = second.posts[0].id;
+  await pool.query(
+    "INSERT INTO content.comment(post_id,user_id,body) SELECT $1,$2,'Synthetic comment '||g FROM generate_series(1,40) g",
+    [id, users.rifat.id],
+  );
+  const shared = await view("rifat", "feed", `&post=${id}`);
+  assert.equal(shared.posts.length, 1);
+  assert.equal(shared.posts[0].id, id);
+  assert.equal(shared.posts[0].comment_list.length, 30);
+  await assert.rejects(
+    view("rifat", "feed", "&cursor=bad"),
+    /Invalid feed cursor/,
+  );
+});
+test("audit: grouped reports preserve evidence and critical unresolved work leads the queue", async () => {
+  const p = await call("bogurashop", "post", {
+    caption: "Audit critical report fixture",
+    template: "original",
+    publish: true,
+  });
+  await Promise.all([
+    call("rifat", "report", {
+      id: p.id,
+      reason: "minor_safety",
+      note: "Synthetic reviewer detail",
+      block: false,
+    }),
+    call("shakib", "report", {
+      id: p.id,
+      reason: "minor_safety",
+      note: "Another synthetic detail",
+      block: false,
+    }),
+  ]);
+  const review = await one(
+    pool,
+    "SELECT * FROM trust.moderation_case WHERE post_id=$1",
+    [p.id],
+  );
+  await pool.query(
+    "UPDATE trust.moderation_case SET opened_at=now()-interval '1 hour' WHERE id=$1",
+    [review!.id],
+  );
+  await pool.query(
+    "INSERT INTO trust.moderation_case(subject_id,category,severity,state) SELECT $1,'spam','low','dismissed' FROM generate_series(1,110)",
+    [users.bogurashop.id],
+  );
+  const data = await view("operations", "admin");
+  assert.equal(data.cases[0].id, review!.id);
+  assert.equal(data.cases[0].report_count, 2);
+  assert.equal(data.cases[0].evidence.length, 2);
+  assert.equal(data.cases[0].overdue, true);
+  assert.ok(
+    data.safetySummary.overdue >= 1,
+    "Critical backlog is counted independently of the page",
+  );
+});
+test("audit: brand briefs can select only one creator, including concurrent selections", async () => {
+  const title = `Audit brief ${randomUUID()}`;
+  await call("bogurashop", "brief", {
+    title,
+    description: "Synthetic brand collaboration",
+    budget: 10000,
+  });
+  const b = await one(pool, "SELECT id FROM app.brief WHERE title=$1", [title]);
+  await call("rifat", "brief-apply", {
+    id: b!.id,
+    pitch: "Synthetic application from a creator",
+  });
+  await call("shakib", "brief-apply", {
+    id: b!.id,
+    pitch: "Another synthetic application",
+  });
+  const results = await Promise.allSettled(
+    ["rifat", "shakib"].map((who) =>
+      call("bogurashop", "brief-select", {
+        id: b!.id,
+        creatorId: users[who].id,
+      }),
+    ),
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  await assert.rejects(
+    pool.query(
+      "UPDATE app.application SET state='selected' WHERE brief_id=$1 AND state<>'selected'",
+      [b!.id],
+    ),
+    /already has a selected/,
+  );
+});
+test("audit: an old identity approval cannot override the latest review", async () => {
+  await pool.query(
+    "INSERT INTO identity.kyc_record(subject_id,vault_ref,state,created_at,decided_at) VALUES($1,'sandbox:audit-older','submitted',now()+interval '1 second',NULL),($1,'sandbox:audit-current','rejected',now()+interval '2 seconds',now())",
+    [users.shakib.id],
+  );
+  const old = await one(
+    pool,
+    "SELECT id FROM identity.kyc_record WHERE vault_ref='sandbox:audit-older'",
+  );
+  await assert.rejects(
+    call("operations", "admin-kyc", { id: old!.id, approve: true }),
+    /Review unavailable/,
+  );
+  await assert.rejects(
+    call("shakib", "withdraw", { amount: 100, source: "gift_liability" }),
+    /Identity verification/,
+  );
+});
+test("audit: maintenance preserves financial receipts and default database setup refuses existing data", async () => {
+  const financial = randomUUID(),
+    transient = randomUUID(),
+    legacy = randomUUID();
+  await pool.query(
+    "INSERT INTO app.command(user_id,key,fingerprint,response,action,created_at) VALUES($1,$2,'audit','{}','withdraw',now()-interval '40 days'),($1,$3,'audit','{}','watch',now()-interval '40 days'),($1,$4,'audit','{}',NULL,now()-interval '40 days')",
+    [users.rifat.id, financial, transient, legacy],
+  );
+  const output = execFileSync(
+    process.execPath,
+    ["--import", "tsx", "scripts/maintenance.ts"],
+    { env: process.env, encoding: "utf8" },
+  );
+  assert.ok(
+    JSON.parse(output).removed.nonfinancialReceipts >= 1,
+    "Maintenance reports expired transient receipts",
+  );
+  assert.equal(
+    (await one(
+      pool,
+      "SELECT count(*) n FROM app.command WHERE key=ANY($1::text[])",
+      [[financial, legacy]],
+    ))!.n,
+    2,
+  );
+  assert.equal(
+    (await one(pool, "SELECT count(*) n FROM app.command WHERE key=$1", [
+      transient,
+    ]))!.n,
+    0,
+  );
+  const beforeCount = (await one(
+    pool,
+    "SELECT count(*) n FROM ledger.journal_entry",
+  ))!.n;
+  const pgEnv = {
+    ...process.env,
+    PGHOST: url.searchParams.get("host") || url.hostname || "/tmp",
+    PGPORT: url.port || "5432",
+    PGPASSWORD: decodeURIComponent(url.password),
+    ...(url.username ? { PGUSER: decodeURIComponent(url.username) } : {}),
+  };
+  assert.throws(
+    () =>
+      execFileSync("bash", ["db/apply.sh", testName], {
+        env: pgEnv,
+        stdio: "pipe",
+      }),
+    /already exists/,
+  );
+  assert.equal(
+    (await one(pool, "SELECT count(*) n FROM ledger.journal_entry"))!.n,
+    beforeCount,
+  );
+});

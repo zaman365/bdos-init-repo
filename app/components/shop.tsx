@@ -525,6 +525,8 @@ export function Seller() {
         await act("product", {
           ...v,
           id: p?.id,
+          version: p?.version,
+          skuVersion: p?.skus.find((s: Row) => s.code === "default")?.version,
           category: Number(v.category),
           price: Math.round(v.price * 100),
         });
@@ -652,6 +654,56 @@ export function Seller() {
                           <div key={s.id}>
                             {s.variant_label} · {s.stock} ·{" "}
                             <Money value={s.price_paisa} />
+                            <button
+                              className="text-button"
+                              aria-label={`Edit variant ${s.variant_label}`}
+                              onClick={() =>
+                                modal({
+                                  title: t(
+                                    "ভ্যারিয়েন্ট আপডেট",
+                                    "Edit variant",
+                                  ),
+                                  description: t(
+                                    "স্টক পরিবর্তন হলে আবার খুলতে হবে।",
+                                    "If stock changes, refresh and reopen this form.",
+                                  ),
+                                  fields: [
+                                    {
+                                      name: "label",
+                                      label: "Variant label",
+                                      value: s.variant_label,
+                                    },
+                                    {
+                                      name: "price",
+                                      label: "Price (৳)",
+                                      type: "number",
+                                      min: 1,
+                                      step: "0.01",
+                                      value: s.price_paisa / 100,
+                                    },
+                                    {
+                                      name: "stock",
+                                      label: "Available stock",
+                                      type: "number",
+                                      min: 0,
+                                      value: s.stock,
+                                    },
+                                  ],
+                                  submit: t("সেভ করো", "Save variant"),
+                                  onSubmit: async (v) => {
+                                    await act("sku", {
+                                      ...v,
+                                      id: s.id,
+                                      productId: p.id,
+                                      version: s.version,
+                                      price: Math.round(v.price * 100),
+                                    });
+                                  },
+                                })
+                              }
+                            >
+                              {t("এডিট", "Edit variant")}
+                            </button>
                           </div>
                         ))}
                       </td>
