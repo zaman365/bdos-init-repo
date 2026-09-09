@@ -47,17 +47,17 @@ existing one requires explicit `./db/apply.sh --reset bdos_dev`.
 
 ## Repository map
 
-| Path | Purpose |
-|---|---|
-| `app/` | Responsive Bangla/English application and HTTP routes |
-| `lib/` | Authentication, domain workflows, scoped locking, queries, media |
-| `packages/` | Money, ledger and ranking rules with tests |
-| `db/migrations/` | PostgreSQL schemas and operational constraints |
-| `scripts/` | Migration, seed, maintenance and blueprint generation |
-| `tests/` | Workflow, concurrency, permission, media and browser tests |
-| `brand/`, `public/art/` | Matra identity, tokens, original demo illustrations |
-| `docs/` | Original strategy, audit, guidelines and user manual |
-| `site/`, `functions/` | Existing Cloudflare Pages marketing site and waitlist |
+| Path                    | Purpose                                                          |
+| ----------------------- | ---------------------------------------------------------------- |
+| `app/`                  | Responsive Bangla/English application and HTTP routes            |
+| `lib/`                  | Authentication, domain workflows, scoped locking, queries, media |
+| `packages/`             | Money, ledger and ranking rules with tests                       |
+| `db/migrations/`        | PostgreSQL schemas and operational constraints                   |
+| `scripts/`              | Migration, seed, maintenance and blueprint generation            |
+| `tests/`                | Workflow, concurrency, permission, media and browser tests       |
+| `brand/`, `public/art/` | Matra identity, tokens, original demo illustrations              |
+| `docs/`                 | Original strategy, audit, guidelines and user manual             |
+| `site/`, `functions/`   | Existing Cloudflare Pages marketing site and waitlist            |
 
 ## Planning and audit
 
@@ -65,6 +65,8 @@ Start with [the MVP documentation audit](docs/07-MVP-AUDIT.md),
 [the earlier system audit](docs/08-SYSTEM-AUDIT.md), and
 [the implementation and verification record](docs/09-MVP-IMPLEMENTATION.md), and
 [the branch audit and improvement plan](docs/10-BRANCH-AUDIT-IMPROVEMENT-PLAN.md).
+The [UI/UX audit and improvement report](docs/11-UI-UX-AUDIT.md) records
+desktop/mobile findings, screenshots, priorities, and acceptance criteria.
 The original [ecosystem](docs/02-bdos-product-ecosystem.md),
 [architecture](docs/03-architecture-and-stack.md),
 [brand](docs/04-brand-system.md) and [roadmap](docs/06-roadmap-org-economics.md)

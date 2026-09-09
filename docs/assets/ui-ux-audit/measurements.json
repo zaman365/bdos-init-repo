@@ -1,0 +1,276 @@
+{
+  "auditDate": "2026-09-09",
+  "commit": "e6333a62e8336a205a24c7bcd359e31f6eb2057d",
+  "browser": "Headless Chromium via local Playwright 1.63.0",
+  "desktopViewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "mobileViewport": {
+    "width": 390,
+    "height": 844
+  },
+  "methodNotes": [
+    "Mobile-sized desktop browser viewport, not a physical device or a complete touch-device emulation.",
+    "Contrast samples use computed foreground colors and an opaque background without a gradient; ratios are rounded.",
+    "Control measurements below exclude the Next.js development indicator.",
+    "Initial cart position is from a fresh Bangla Shop navigation, before interacting with the cart.",
+    "The runtime Operations queue contained no pending cases; populated-case evidence omission was established by source inspection."
+  ],
+  "profileLanguage": {
+    "before": {
+      "selected": "bn",
+      "heading": "তোমার দুনিয়া। তোমার নিয়ন্ত্রণ।"
+    },
+    "after": {
+      "selected": "bn",
+      "heading": "Your space. Your rules."
+    },
+    "restored": true,
+    "saveSubmitted": false
+  },
+  "closedMobileDrawerFocus": [
+    {
+      "text": "Skip to content",
+      "aria": null,
+      "x": 10,
+      "y": 10,
+      "width": 108.359375,
+      "height": 41.6875
+    },
+    {
+      "text": "BDOSবিডস",
+      "aria": "BDOS home",
+      "x": -227,
+      "y": 25,
+      "width": 213,
+      "height": 48.046875
+    },
+    {
+      "text": "তোমার গল্প বলো",
+      "aria": null,
+      "x": -223,
+      "y": 124.4375,
+      "width": 205,
+      "height": 41
+    },
+    {
+      "text": "দেখো",
+      "aria": null,
+      "x": -227,
+      "y": 219.828125,
+      "width": 213,
+      "height": 44
+    },
+    {
+      "text": "কাট",
+      "aria": null,
+      "x": -227,
+      "y": 266.828125,
+      "width": 213,
+      "height": 44
+    },
+    {
+      "text": "কেনাকাটা",
+      "aria": null,
+      "x": -227,
+      "y": 313.828125,
+      "width": 213,
+      "height": 44
+    }
+  ],
+  "mobileTargets": [
+    {
+      "label": "Search BDOS",
+      "width": 131.734375,
+      "height": 15.5,
+      "x": 100.265625,
+      "y": 22.25,
+      "display": "block"
+    },
+    {
+      "label": "Switch language",
+      "width": 39,
+      "height": 44,
+      "x": 253,
+      "y": 8,
+      "display": "flex"
+    },
+    {
+      "label": "পাশে",
+      "width": 25.71875,
+      "height": 47,
+      "x": 171,
+      "y": 247.484375,
+      "display": "flex"
+    },
+    {
+      "label": "রোজকার জামদানি২,৪০০.০০৳",
+      "width": 316,
+      "height": 39.046875,
+      "x": 37,
+      "y": 832.859375,
+      "display": "inline-flex"
+    }
+  ],
+  "initialMobileCart": {
+    "x": 19,
+    "y": 1862.109375,
+    "width": 352,
+    "height": 256.6875
+  },
+  "mobileSearchContainer": {
+    "x": 62,
+    "y": 13.5,
+    "width": 183,
+    "height": 33
+  },
+  "draftNavigation": {
+    "enteredCaption": "Unsaved audit draft; do not publish",
+    "afterReturning": "",
+    "published": false
+  },
+  "dialog": {
+    "ariaLabel": null,
+    "ariaLabelledby": null,
+    "snapshot": "- dialog:\n  - paragraph: BDOS\n  - heading \"Grant promotion permission\" [level=2]\n  - button \"Close dialog\"\n  - text: Your published post\n  - combobox \"Your published post\":\n    - 'option \"সুতোর ভাঁজে বাংলাদেশের গল্প। A little craft, a lot of heart. #jamdani\" [selected]'\n    - option \"তোমার শহর। তোমার মঞ্চ। A new day on your stage.\"\n    - option \"From Bogura, with love. বগুড়ার গল্প\"\n  - text: Seller\n  - combobox \"Seller\":\n    - option \"Bogura Craft House\" [selected]\n  - button \"বাতিল\"\n  - button \"Grant permission\""
+  },
+  "contrast": [
+    {
+      "selector": ".nav-label",
+      "foreground": "rgb(101, 119, 108)",
+      "background": "rgb(12, 17, 14)",
+      "fontSize": "8px",
+      "ratio": 4
+    },
+    {
+      "selector": ".tab-note",
+      "foreground": "rgb(78, 105, 87)",
+      "background": "rgb(12, 17, 14)",
+      "fontSize": "8px",
+      "ratio": 3.16
+    },
+    {
+      "selector": ".footer",
+      "foreground": "rgb(103, 125, 109)",
+      "background": "rgb(12, 17, 14)",
+      "fontSize": "10px",
+      "ratio": 4.29
+    },
+    {
+      "selector": ".sandbox-right",
+      "foreground": "rgb(102, 134, 114)",
+      "background": "rgb(18, 35, 25)",
+      "fontSize": "8px",
+      "ratio": 4.08
+    },
+    {
+      "selector": ".brand-tag",
+      "foreground": "rgb(123, 144, 130)",
+      "background": "rgb(12, 17, 14)",
+      "fontSize": "8px",
+      "ratio": 5.58
+    }
+  ],
+  "feedTabs": [
+    {
+      "name": "For you",
+      "selected": "true",
+      "controls": null,
+      "tabIndex": 0
+    },
+    {
+      "name": "Following",
+      "selected": "false",
+      "controls": null,
+      "tabIndex": 0
+    },
+    {
+      "name": "Pashe · Friends",
+      "selected": "false",
+      "controls": null,
+      "tabIndex": 0
+    }
+  ],
+  "feedAfterArrowRight": {
+    "text": "For you",
+    "selected": "true"
+  },
+  "cart": {
+    "firstAddQuantity": 2,
+    "secondAddDefaultQuantity": 1,
+    "originalCartRestored": true
+  },
+  "checkoutDialogText": "BDOS\n\nPlace your order\n\nCOD prepays the delivery fee; digital payments are held in escrow. All payments are sandbox simulations.\n\nFull delivery address\nDistrict\nPayment method\nCash on delivery\nbKash · sandbox\nNagad · sandbox\nCard · sandbox\nVoucher (optional)\nCancel\nPlace order",
+  "orderSubmitted": false,
+  "emptyPermission": {
+    "options": 0,
+    "submitDisabled": false
+  },
+  "creatorDesktopSweep": {
+    "feed": {
+      "heading": "বাংলাদেশ, তোমার মঞ্চে।",
+      "documentOverflow": false
+    },
+    "cut": {
+      "heading": "তোমার গল্প, তোমার মতো।",
+      "documentOverflow": false
+    },
+    "shop": {
+      "heading": "দেশের তৈরি। তোমার পছন্দ।",
+      "documentOverflow": false
+    },
+    "live": {
+      "heading": "এখনই, একসাথে।",
+      "documentOverflow": false
+    },
+    "studio": {
+      "heading": "তোমার সৃজনশীলতা, তোমার আয়।",
+      "documentOverflow": false
+    },
+    "affiliate": {
+      "heading": "ভালো লাগা থেকে ভালো আয়।",
+      "documentOverflow": false
+    },
+    "seller": {
+      "heading": "ব্যবসা বাড়ুক, সহজে।",
+      "documentOverflow": false
+    },
+    "ads": {
+      "heading": "ভালো গল্প, আরও মানুষের কাছে।",
+      "documentOverflow": false
+    },
+    "orders": {
+      "heading": "তোমার অর্ডার",
+      "documentOverflow": false
+    },
+    "inbox": {
+      "heading": "কথা হোক, সম্মান রেখে।",
+      "documentOverflow": false
+    },
+    "profile": {
+      "heading": "তোমার দুনিয়া। তোমার নিয়ন্ত্রণ।",
+      "documentOverflow": false
+    }
+  },
+  "creatorUncaughtPageErrors": [],
+  "roleSweep": {
+    "seller": {
+      "desktopOverflow": false,
+      "mobileOverflow": false
+    },
+    "operations": {
+      "desktopOverflow": false,
+      "mobileOverflow": false
+    },
+    "partner": {
+      "desktopOverflow": false,
+      "mobileOverflow": false
+    },
+    "minor": {
+      "desktopOverflow": false,
+      "mobileOverflow": false
+    }
+  },
+  "operationsPendingCasesObserved": 0
+}
