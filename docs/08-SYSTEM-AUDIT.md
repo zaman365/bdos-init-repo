@@ -222,3 +222,54 @@ Consequences to avoid repeating:
 Until that is settled, findings H1 (build gate) and H3 (no UI) cannot be
 reliably fixed from this session: both live in files the other agent is
 actively rewriting.
+
+
+---
+
+## Resolution status
+
+Updated 9 September 2026 after the fix iterations. Verified by running the
+gate, not by reading diffs: `tsc` clean, 102 package + integration tests pass,
+17 database invariants pass, `next build` succeeds.
+
+| # | Finding | Status | Fixed by |
+|---|---|---|---|
+| H1 | Build gate broken | **Closed** | Journal lines typed; undeclared `ffmpeg-static` import removed. `tsc` passes for the first time on this branch |
+| H2 | No production auth path | **Closed** | `lib/providers.ts` defines `SmsProvider` with a sandbox no-op and an HTTPS webhook implementation. The production path exists and is merely unconfigured |
+| H3 | No UI for any surface | **Partial** | `app/components` gains content, shop, workspace and Live surfaces. Not all six are complete |
+| H4 | Every mutation behind one global lock | **Closed** | `lib/locks.ts` resolves affected entities and locks them in lexical order. See the note below on withdrawal scope |
+| M1 | Escrow release implemented twice | **Closed** | `lib/commerce.ts:469` now calls `releaseEscrow()`; the package is the single definition. Required generalising it to take a discount and a pre-computed commission |
+| M2 | OTP hashed with bare SHA-256 | **Closed** | `otpHash()` uses HMAC-SHA256 with `AUTH_SECRET`, required outside the sandbox |
+| M3 | Cookie may ship without `Secure` | **Closed** | `Secure` is now set unless explicitly sandboxed |
+| M4 | `sessionInfo()` returned a user directory | **Closed** | Scoped to accounts with a follow relationship or a prior message |
+| M5 | `packages/ranking` untested | **Closed** | 17 tests covering the audition guarantee, spacing, determinism and Banglish round-tripping |
+| M6 | npm scripts pointing at missing files | **Closed** | `scripts/seed.ts` and `tests/integration.test.ts` exist and run |
+| L1 | Unbounded operational tables | **Closed** | `scripts/maintenance.ts` reaps expired OTP, rate-limit and old command rows |
+| L2 | `notify()` silently discards past ten/day | **Open** | Low impact; the cap is intended, only the silence is wrong |
+| L3 | SQL assembled by concatenation in `lib/read.ts` | **Open** | Not injectable — verified. Banned in new code by `docs/guidelines/01-engineering.md` |
+
+### Two findings that emerged from fixing H4
+
+**The global lock was replaced, but withdrawal moved the ceiling rather than
+removing it.** `clearDue()` swept every matured accrual on the platform, so one
+creator pressing "withdraw" row-locked every due order in the system and
+serialised against every other withdrawal. It is now scoped: a withdrawal
+clears only the withdrawing party's accruals, and only the admin sweep runs
+unscoped. Pinned by an integration test that was confirmed to fail against the
+old code with the message *"a seller's withdrawal cleared an unrelated
+creator's commission"*.
+
+**Lock scope was a hand-maintained allowlist with no default.** An action
+missing from `lib/locks.ts` received only the acting party's lock, so a new
+command touching another party's money would have raced silently. Unknown
+actions now fall back to a whole-platform lock: correct but slow, which
+surfaces as latency instead of as corrupted money.
+
+### Known limitation, not yet addressed
+
+Lock resolution runs `SELECT`s to discover affected parties and *then* acquires
+the locks. Between the two, a new `order_item` with a different affiliate
+creator could appear, leaving that party unlocked for the rest of the
+transaction. Closing this properly needs either a coarser lock on the order
+aggregate or `SELECT ... FOR UPDATE` during resolution. Recorded here rather
+than left implicit.

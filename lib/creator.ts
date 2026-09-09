@@ -16,10 +16,20 @@ import { journal, balance } from "./journal";
 import { sendGift, clearCommission } from "../packages/ledger/src/index.ts";
 import { withhold } from "../packages/money/src/index.ts";
 const uuid = z.string().uuid();
-export async function clearDue(db: DB) {
+/**
+ * Clear commission accruals whose return window has closed.
+ *
+ * Pass a creatorId to clear only that creator's accruals. A withdrawal must
+ * always do that: an unscoped sweep row-locks every matured order on the
+ * platform, so one creator pressing "withdraw" would serialise against every
+ * other creator and get slower as the platform grows. Only the scheduled
+ * admin sweep runs unscoped.
+ */
+export async function clearDue(db: DB, creatorId?: string) {
   const due = await rows(
     db,
-    `SELECT a.* FROM ledger.commission_accrual a JOIN commerce.order_item i ON i.id=a.order_item_id JOIN commerce.customer_order o ON o.id=i.order_id WHERE a.state='held' AND a.hold_until<=now() AND o.state IN ('delivered','completed') ORDER BY o.id,a.id FOR UPDATE OF o,a`,
+    `SELECT a.* FROM ledger.commission_accrual a JOIN commerce.order_item i ON i.id=a.order_item_id JOIN commerce.customer_order o ON o.id=i.order_id WHERE a.state='held' AND a.hold_until<=now() AND o.state IN ('delivered','completed') AND ($1::uuid IS NULL OR a.creator_id=$1) ORDER BY o.id,a.id FOR UPDATE OF o,a`,
+    [creatorId ?? null],
   );
   for (const a of due) {
     const entry = await journal(
@@ -35,9 +45,17 @@ export async function clearDue(db: DB) {
       [a.id, entry],
     );
   }
-  await db.query(
-    "UPDATE commerce.customer_order SET state='completed' WHERE state='delivered' AND return_window_ends<=now()",
-  );
+  // Completing orders is scoped the same way, for the same reason.
+  if (creatorId) {
+    await db.query(
+      `UPDATE commerce.customer_order o SET state='completed' WHERE o.state='delivered' AND o.return_window_ends<=now() AND EXISTS (SELECT 1 FROM commerce.order_item i JOIN ledger.commission_accrual a ON a.order_item_id=i.id WHERE i.order_id=o.id AND a.creator_id=$1)`,
+      [creatorId],
+    );
+  } else {
+    await db.query(
+      "UPDATE commerce.customer_order SET state='completed' WHERE state='delivered' AND return_window_ends<=now()",
+    );
+  }
   return due.length;
 }
 export async function creatorCommand(
@@ -273,7 +291,7 @@ export async function creatorCommand(
       [u.id],
     );
     need(method, "Save a verified payout destination first");
-    await clearDue(db);
+    await clearDue(db, u.id);
     const owner =
       d.source === "seller_payable" ? (await sellerFor(db, u)).id : u.id;
     let available = await balance(db, d.source, owner);

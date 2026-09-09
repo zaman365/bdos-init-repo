@@ -1215,3 +1215,57 @@ test("audit: maintenance preserves financial receipts and default database setup
     beforeCount,
   );
 });
+test("audit: a seller's withdrawal does not clear an unrelated creator's commission", async () => {
+  // Regression for docs/08-SYSTEM-AUDIT.md H4. clearDue() used to sweep every
+  // matured accrual on the platform, so one party's withdrawal cleared — and
+  // row-locked — every other party's money. A withdrawal must only ever touch
+  // the withdrawing party's own accruals; the unscoped sweep is admin-only.
+  const id = await order();
+  await deliver(id);
+  const accrual = await one(
+    pool,
+    "SELECT a.* FROM ledger.commission_accrual a JOIN commerce.order_item i ON i.id=a.order_item_id WHERE i.order_id=$1",
+    [id],
+  );
+  assert.equal(accrual!.state, "held");
+  assert.equal(accrual!.creator_id, users.nusrat.id);
+
+  // Mature the accrual and close the order's return window, so the only thing
+  // standing between "held" and "cleared" is who runs the sweep.
+  await pool.query(
+    "UPDATE ledger.commission_accrual SET hold_until=now()-interval '1 second' WHERE id=$1",
+    [accrual!.id],
+  );
+  await pool.query(
+    "UPDATE commerce.customer_order SET return_window_ends=now()-interval '1 second' WHERE id=$1",
+    [id],
+  );
+
+  // The seller withdraws its own money. This must succeed and must not touch
+  // the creator's commission.
+  await call("bogurashop", "withdraw", {
+    source: "seller_payable",
+    amount: 100,
+  });
+  assert.equal(
+    (await one(pool, "SELECT state FROM ledger.commission_accrual WHERE id=$1", [
+      accrual!.id,
+    ]))!.state,
+    "held",
+    "a seller's withdrawal cleared an unrelated creator's commission",
+  );
+
+  // The scheduled admin sweep is what clears it.
+  await call("operations", "admin-clear");
+  assert.equal(
+    (await one(pool, "SELECT state FROM ledger.commission_accrual WHERE id=$1", [
+      accrual!.id,
+    ]))!.state,
+    "cleared",
+  );
+  assert.equal(
+    (await one(pool, "SELECT drift_paisa FROM ledger.trial_balance"))!
+      .drift_paisa,
+    0,
+  );
+});
