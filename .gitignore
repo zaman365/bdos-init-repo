@@ -12,3 +12,5 @@ dist/
 test-results/
 playwright-report/
 coverage/
+next-env.d.ts
+.claude/launch.json
