@@ -40,6 +40,32 @@ It holds take rates, unit economics, org headcount and the risk register, so it 
 only be served behind Cloudflare Access. It is deliberately absent from `site/` until
 that gate exists.
 
+## Guidelines
+
+Operating rules, each stating the reason alongside the rule — see
+[docs/guidelines/](docs/guidelines/00-INDEX.md).
+
+| # | Guideline | Governs |
+|---|---|---|
+| 01 | [Engineering](docs/guidelines/01-engineering.md) | Code, APIs, errors, concurrency, testing, review |
+| 02 | [Product](docs/guidelines/02-product.md) | What ships, in what order, and the gates between |
+| 03 | [Design](docs/guidelines/03-design.md) | Brand application, UI rules, dual-script type, accessibility |
+| 04 | [Money](docs/guidelines/04-money.md) | Paisa arithmetic, ledger invariants, escrow, tax, payouts |
+| 05 | [Trust & Safety](docs/guidelines/05-trust-safety.md) | Moderation, Nirapod, enforcement, escalation |
+| 06 | [Data & privacy](docs/guidelines/06-data-privacy.md) | PII, residency, retention, KYC, what we refuse to collect |
+| 07 | [Ranking](docs/guidelines/07-ranking.md) | What the feed optimises, and what it must never optimise |
+| 08 | [Operations](docs/guidelines/08-operations.md) | Runbook, reconciliation, on-call, multi-agent hygiene |
+
+Current gap list against these rules: [docs/08-SYSTEM-AUDIT.md](docs/08-SYSTEM-AUDIT.md).
+
+## Verify
+
+```
+npm run verify      # typecheck + package tests + database invariants
+./db/apply.sh       # rebuild a local database from migrations
+./db/test.sh        # 17 ledger/commerce invariants against real PostgreSQL
+```
+
 **Sequencing rule:** attention before commerce · commerce before ads · payouts before growth spend.
 
 All market figures in these documents are planning estimates, and all legal points need
