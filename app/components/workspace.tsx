@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Plus,
@@ -24,6 +24,8 @@ import {
   Topup,
   Avatar,
   options,
+  When,
+  Age,
   type Row,
 } from "./ui";
 export function Studio() {
@@ -374,7 +376,7 @@ export function Payouts() {
             <span>
               {p.channel}
               <small>
-                {new Date(p.requested_at).toLocaleDateString()} · {p.state}
+                <When value={p.requested_at} /> · {p.state}
               </small>
             </span>
             <Money value={p.amount_paisa} />
@@ -684,7 +686,9 @@ export function Affiliate() {
                   <td>
                     <Pill>{a.state}</Pill>
                   </td>
-                  <td>{new Date(a.hold_until).toLocaleString()}</td>
+                  <td>
+                    <When value={a.hold_until} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -923,27 +927,33 @@ export function Ads() {
               <strong>{c.trade_name}</strong>
               <p>{c.caption}</p>
               <small>
-                {c.report_count} report(s) · opened{" "}
-                {new Date(c.opened_at).toLocaleString()}
-                {c.overdue ? " · Critical review overdue" : ""}
+                {t(
+                  "এই দোকান তোমার ভিডিও দিয়ে বিজ্ঞাপন দিতে পারবে",
+                  "This shop may promote your story as an ad",
+                )}{" "}
+                · {t("অনুমতি দেওয়া হয়েছে", "granted")}{" "}
+                <When value={c.granted_at} />
               </small>
-              {c.evidence?.map((e: Row, i: number) => (
-                <blockquote key={i}>
-                  {e.note || "No additional details supplied"}
-                </blockquote>
-              ))}
-              <button
-                className="text-button"
-                onClick={() =>
-                  void act("spark-consent", {
-                    postId: c.post_id,
-                    sellerId: c.seller_id,
-                    grant: false,
-                  }).catch(() => {})
-                }
-              >
-                Revoke permission
-              </button>
+              <div className="action-row">
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    void act("spark-consent", {
+                      postId: c.post_id,
+                      sellerId: c.seller_id,
+                      grant: false,
+                    }).catch(() => {})
+                  }
+                >
+                  {t("অনুমতি ফিরিয়ে নাও", "Revoke permission")}
+                </button>
+                <small className="muted">
+                  {t(
+                    "ফিরিয়ে নিলে চলমান বিজ্ঞাপন বন্ধ হয়ে যাবে",
+                    "Revoking stops any running ad that uses this story",
+                  )}
+                </small>
+              </div>
             </article>
           ))}
           <div className="notice">
@@ -958,6 +968,20 @@ export function Ads() {
 export function Profile() {
   const { data, t, act, modal } = useApp();
   const s = data.settings ?? {};
+
+  // UX-04: language and Data Saver can be changed from the header while this
+  // form is mounted. As uncontrolled inputs they kept a stale DOM value, and
+  // saving any other edit wrote the old preference back. These two are
+  // controlled and synced from the account; name and bio stay uncontrolled so
+  // a sync can never discard text the user is still typing.
+  const [localeDraft, setLocaleDraft] = useState<"bn" | "en">(data.user.locale);
+  const [dataSaverDraft, setDataSaverDraft] = useState(!!data.user.data_saver);
+  useEffect(() => setLocaleDraft(data.user.locale), [data.user.locale]);
+  useEffect(
+    () => setDataSaverDraft(!!data.user.data_saver),
+    [data.user.data_saver],
+  );
+
   return (
     <>
       <Heading
@@ -977,8 +1001,8 @@ export function Profile() {
             await act("profile", {
               name: f.get("name"),
               bio: f.get("bio"),
-              locale: f.get("locale"),
-              dataSaver: f.get("dataSaver") === "on",
+              locale: localeDraft,
+              dataSaver: dataSaverDraft,
               dm: f.get("dm"),
               filter: f.get("filter"),
               duet: f.get("duet") === "on",
@@ -1013,7 +1037,13 @@ export function Profile() {
           </label>
           <label>
             {t("ভাষা", "Language")}
-            <select name="locale" defaultValue={data.user.locale}>
+            <select
+              name="locale"
+              value={localeDraft}
+              onChange={(e) =>
+                setLocaleDraft(e.currentTarget.value as "bn" | "en")
+              }
+            >
               <option value="bn">বাংলা</option>
               <option value="en">English</option>
             </select>
@@ -1034,8 +1064,16 @@ export function Profile() {
               <option value="off">Off</option>
             </select>
           </label>
+          <label className="checkbox-label">
+            <input
+              name="dataSaver"
+              type="checkbox"
+              checked={dataSaverDraft}
+              onChange={(e) => setDataSaverDraft(e.currentTarget.checked)}
+            />
+            {t("ডেটা সেভার", "Data Saver")}
+          </label>
           {[
-            ["dataSaver", "ডেটা সেভার", "Data Saver", data.user.data_saver],
             ["duet", "Duet অনুমতি", "Allow Duet", s.allow_duet],
             ["stitch", "Stitch অনুমতি", "Allow Stitch", s.allow_stitch],
             [
@@ -1185,7 +1223,9 @@ export function Inbox() {
                 {m.sender_name} → {m.recipient_name}
               </strong>
               <p>{m.body}</p>
-              <small>{new Date(m.created_at).toLocaleString()}</small>
+              <small>
+                <When value={m.created_at} />
+              </small>
             </div>
           </article>
         ))}
@@ -1332,8 +1372,47 @@ export function Admin() {
                 </Pill>
               </div>
               <p>{c.caption}</p>
+              <small className={c.overdue ? "case-meta overdue" : "case-meta"}>
+                {c.report_count ?? 0}{" "}
+                {t("রিপোর্ট", Number(c.report_count) === 1 ? "report" : "reports")}
+                {" · "}
+                {t("খোলা হয়েছে", "opened")} <Age value={c.opened_at} />{" "}
+                {t("আগে", "ago")}
+                {c.overdue
+                  ? ` · ${t("জরুরি পর্যালোচনা বাকি", "critical review overdue")}`
+                  : ""}
+                {c.detected_lang ? ` · ${c.detected_lang}` : ""}
+              </small>
+              {c.evidence?.length ? (
+                <div className="evidence">
+                  <strong className="evidence-label">
+                    {t("রিপোর্টে যা বলা হয়েছে", "What reporters said")}
+                  </strong>
+                  {c.evidence.map((e: Row, i: number) => (
+                    <blockquote key={i} className="evidence-note">
+                      {e.note || t("বিস্তারিত দেওয়া হয়নি", "No details supplied")}
+                      <cite>
+                        {String(e.category ?? "").replaceAll("_", " ")} ·{" "}
+                        <When value={e.created_at} />
+                      </cite>
+                    </blockquote>
+                  ))}
+                </div>
+              ) : (
+                <small className="muted">
+                  {t(
+                    "কোনো রিপোর্ট নোট নেই — স্বয়ংক্রিয়ভাবে শনাক্ত",
+                    "No reporter notes — detected automatically",
+                  )}
+                </small>
+              )}
               {c.appeal_statement && (
-                <blockquote>{c.appeal_statement}</blockquote>
+                <div className="evidence appeal">
+                  <strong className="evidence-label">
+                    {t("আপিলে যা বলা হয়েছে", "What the account appealed")}
+                  </strong>
+                  <blockquote>{c.appeal_statement}</blockquote>
+                </div>
               )}
               <button
                 className="secondary"
@@ -1435,7 +1514,9 @@ export function Admin() {
             <tbody>
               {data.journals?.map((j: Row) => (
                 <tr key={j.id}>
-                  <td>{new Date(j.created_at).toLocaleString()}</td>
+                  <td>
+                    <When value={j.created_at} />
+                  </td>
                   <td>{j.kind.replaceAll("_", " ")}</td>
                   <td>{j.description}</td>
                   <td className="mono">{j.id.slice(0, 8)}</td>
@@ -1475,7 +1556,7 @@ export function Admin() {
               <div className="audit-row" key={a.id}>
                 <strong>{a.action}</strong>
                 <small>
-                  {a.display_name} · {new Date(a.at).toLocaleString()}
+                  {a.display_name} · <When value={a.at} />
                 </small>
               </div>
             ))}

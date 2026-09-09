@@ -43,6 +43,63 @@ export type Context = {
 };
 export const AppContext = createContext<Context>(null!);
 export const useApp = () => useContext(AppContext);
+const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+const bnDigits = (v: string) => v.replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
+
+/**
+ * Format a timestamp with an intentional fallback.
+ *
+ * `new Date(undefined).toLocaleString()` renders the literal string
+ * "Invalid Date", and that shipped into a user-facing card once already
+ * (docs/11-UI-UX-AUDIT.md UX-01). Nothing in this app should construct a Date
+ * for display without going through here.
+ */
+export function formatWhen(value: unknown, locale: "bn" | "en" = "en"): string {
+  if (value === null || value === undefined || value === "") {
+    return locale === "bn" ? "তারিখ নেই" : "no date";
+  }
+  const d = new Date(value as string);
+  if (Number.isNaN(d.getTime())) {
+    return locale === "bn" ? "তারিখ নেই" : "no date";
+  }
+  // en-GB rather than the platform default, so the shape is stable across
+  // hosts; Bengali locales get Bengali digits rather than an ICU guess.
+  const text = d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return locale === "bn" ? bnDigits(text) : text;
+}
+
+/** Elapsed time in words. Queues need age at a glance, not a timestamp. */
+export function formatAge(value: unknown, locale: "bn" | "en" = "en"): string {
+  const d = value ? new Date(value as string) : null;
+  if (!d || Number.isNaN(d.getTime())) return locale === "bn" ? "অজানা" : "unknown";
+  const minutes = Math.max(0, Math.round((Date.now() - d.getTime()) / 60_000));
+  const n = (v: number) => (locale === "bn" ? bnDigits(String(v)) : String(v));
+  if (minutes < 1) return locale === "bn" ? "এখনই" : "just now";
+  if (minutes < 60) return locale === "bn" ? `${n(minutes)} মিনিট` : `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return locale === "bn" ? `${n(hours)} ঘণ্টা` : `${hours}h`;
+  const days = Math.round(hours / 24);
+  return locale === "bn" ? `${n(days)} দিন` : `${days}d`;
+}
+
+/** A formatted timestamp. Use instead of `new Date(x).toLocaleString()`. */
+export function When({ value }: { value: unknown }) {
+  const { locale } = useApp();
+  return <>{formatWhen(value, locale)}</>;
+}
+
+/** How long ago, in words. */
+export function Age({ value }: { value: unknown }) {
+  const { locale } = useApp();
+  return <>{formatAge(value, locale)}</>;
+}
+
 export function Money({ value }: { value: number }) {
   const { money } = useApp();
   return <span className="money">{money(value)}</span>;

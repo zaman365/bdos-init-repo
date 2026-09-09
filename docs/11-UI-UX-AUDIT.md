@@ -3,7 +3,9 @@
 **Date:** 9 September 2026  
 **Branch:** `codex/ecosystem-mvp`  
 **Audited commit:** `e6333a62e8336a205a24c7bcd359e31f6eb2057d`  
-**Status:** Audit complete; recommendations below remain open.
+**Status:** Audit complete. **All five P1 findings are fixed and verified in a
+running instance** (see "P1 resolution" at the end). The eleven P2 findings
+remain open.
 
 ## Assessment
 
@@ -545,3 +547,44 @@ measured conclusions are distinguished above.
 | [Cut mobile](assets/ui-ux-audit/cut-mobile.png)                               | Narrow editor and explicit draft action                                 |
 | [Seller mobile](assets/ui-ux-audit/seller-mobile.png)                         | Catalog table with inner scrolling                                      |
 | [Operations desktop](assets/ui-ux-audit/operations-desktop.png)               | Empty queue and current overview; not evidence of a populated-case test |
+
+
+---
+
+## P1 resolution
+
+Fixed and verified against a running instance on 9 September 2026, seeded with
+a fixture case (critical, two reporters with notes, opened 38 minutes earlier)
+because the local queue was empty during the original audit. Verification used
+the accessibility tree and DOM state rather than screenshots, which suits these
+findings better: three of the five are about what is present in the tree.
+
+| # | Finding | Fix | Verified by |
+|---|---|---|---|
+| UX-01 | Spark permissions showed moderation metadata and `Invalid Date` | Consent cards render seller, story, an explicit permission sentence and the real `granted_at`; revoke moved to its own action row with its consequence stated. All moderation-only fields removed | Rendered three seeded consents with no `Invalid Date` and no moderation wording; the consent row genuinely carries only `post_id, seller_id, granted_at, trade_name, caption` |
+| UX-02 | Operations case cards omitted report evidence and case age | Cards now show report count, opened age, a per-case overdue marker, detected dialect, and each report note with its category and time. Report evidence and appeal statements are styled apart so neither can be mistaken for the other; a case with no notes gets an explicit empty state | Card rendered `2 রিপোর্ট · খোলা হয়েছে ৩৯ মিনিট আগে · জরুরি পর্যালোচনা বাকি · bn_latin` above both notes |
+| UX-03 | Closed mobile drawer stayed keyboard-focusable | Interactivity is driven by the `inert` attribute from React state, plus `aria-expanded`/`aria-controls`, focus into the drawer on open, Escape to close, and focus returned to the toggle | At 390px the closed drawer is `inert` and its first control cannot take focus; open → reachable; Escape → `inert` again and focus back on the toggle |
+| UX-04 | Header language and the Profile field disagreed | Language and Data Saver are controlled and synced from the account; name and bio stay uncontrolled so a sync cannot discard text being typed. Submit reads the controlled state, not a stale form value | Switching language in the header moved the select from `bn` to `en` while an unsaved name edit survived intact |
+| UX-05 | Leaving Cut silently discarded unsaved work | The draft is mirrored to this device's storage, keyed per account, restored on return, cleared on publish, with a visible "kept on this device — not published" line and an explicit Discard | Caption survived navigating to the feed and back; storage key is scoped to the account id; a second account's key was absent |
+
+### A note on the UX-03 fix, because the first attempt was wrong
+
+The first fix used `visibility: hidden` on the closed drawer, which does remove
+descendants from the focus order. Verification showed the drawer still
+focusable after Escape, and chasing it found the transitions frozen at
+`currentTime: 0` — a background window stops compositing, so the animation
+clock never advanced.
+
+The CSS was correct; the *approach* was not. Making an accessibility guarantee
+depend on a transition completing means the drawer stays focusable for the
+200ms it runs, and indefinitely whenever the browser throttles animations.
+`inert` is immediate and animation-independent, so the guarantee now holds
+regardless. The CSS remains for the visual slide.
+
+### Also fixed while here
+
+Every raw `new Date(x).toLocaleString()` render was replaced with `When` and
+`Age` components (`app/components/ui.tsx`). There were seven such call sites,
+each capable of printing the literal string "Invalid Date" for a null value —
+UX-01 was that bug reaching a user-facing card. Both helpers have an
+intentional locale-aware fallback and render Bengali digits for Bangla.

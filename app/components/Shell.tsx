@@ -93,6 +93,40 @@ export default function Shell() {
   const sender = useRef(commandSender((body) => request("command", body)));
   const pending = useRef(0);
   const t = (bn: string, en: string) => (locale === "bn" ? bn : en);
+
+  // UX-03: the closed mobile drawer used to stay in the tab order while
+  // translated offscreen, so keyboard focus vanished to x = -227px. CSS now
+  // makes it `visibility: hidden` when closed, which removes its descendants
+  // from the focus order; this handles the open case — move focus in, close on
+  // Escape, and hand focus back to the toggle that opened it.
+  const menuRef = useRef<HTMLElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // The drawer is only a drawer below the layout breakpoint; above it the
+  // sidebar is permanent and must stay interactive.
+  const [isDrawer, setIsDrawer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const sync = () => setIsDrawer(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!menu) return;
+    const drawer = menuRef.current;
+    drawer?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenu(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menu]);
   const money = (n: number) =>
     new Intl.NumberFormat(locale === "bn" ? "bn-BD" : "en-BD", {
       style: "currency",
@@ -230,7 +264,17 @@ export default function Shell() {
         <a className="skip-link" href="#main">
           Skip to content
         </a>
-        <aside className={`sidebar ${menu ? "is-open" : ""}`}>
+        <aside
+          id="primary-nav"
+          ref={menuRef}
+          // `inert`, not CSS, decides interactivity. Relying on the
+          // `visibility` transition left the drawer focusable for the 200ms it
+          // ran — and indefinitely if the browser throttled the animation,
+          // which it does in a background window. An accessibility guarantee
+          // must not depend on an animation completing.
+          inert={isDrawer && !menu}
+          className={`sidebar ${menu ? "is-open" : ""}`}
+        >
           <button
             className="brand"
             onClick={() => go("feed")}
@@ -307,8 +351,15 @@ export default function Shell() {
         <div className="main-shell">
           <header className="topbar">
             <button
+              ref={menuButtonRef}
               className="icon-button mobile-menu"
-              aria-label="Open navigation"
+              aria-label={
+                menu
+                  ? t("মেনু বন্ধ করো", "Close navigation")
+                  : t("মেনু খোলো", "Open navigation")
+              }
+              aria-expanded={menu}
+              aria-controls="primary-nav"
               onClick={() => setMenu(!menu)}
             >
               {menu ? <X /> : <Menu />}

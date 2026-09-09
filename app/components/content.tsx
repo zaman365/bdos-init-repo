@@ -522,6 +522,36 @@ export function Cut() {
     [parent, setParent] = useState<Row | null>(null),
     [start, setStart] = useState(0),
     [end, setEnd] = useState<number | undefined>();
+  // UX-05: the whole draft lived in component state, so navigating away —
+  // internally or with the browser — silently discarded caption, captions,
+  // media, tagged product, template and trim. It is now mirrored to this
+  // device's storage, keyed per account so one person's draft can never open
+  // in another's editor, and cleared the moment a story is published.
+  //
+  // Retention: this device only, until published or discarded. Nothing is sent
+  // anywhere; a private draft is never published by being kept.
+  const draftKey = `bdos-cut:${data.user.id}`;
+  const [kept, setKept] = useState(false);
+  const clearKept = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {}
+    setKept(false);
+  };
+  const discard = () => {
+    setCaption("");
+    setCaptions("");
+    setTemplate("original");
+    setMedia(null);
+    setProduct("");
+    setParent(null);
+    setStart(0);
+    setEnd(undefined);
+    setDraft(undefined);
+    clearKept();
+    toast(t("খসড়া মুছে ফেলা হয়েছে", "Draft discarded"));
+  };
+
   useEffect(() => {
     const p = sessionStorage.getItem("bdos-remix");
     if (p) {
@@ -529,8 +559,74 @@ export function Cut() {
       setParent(r);
       setTemplate(r.allow_duet ? "duet" : "stitch");
       sessionStorage.removeItem("bdos-remix");
+      return; // a remix starts from the parent, not from a kept draft
     }
-  }, []);
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      setCaption(d.caption ?? "");
+      setCaptions(d.captions ?? "");
+      setTemplate(d.template ?? "original");
+      setMedia(d.media ?? null);
+      setProduct(d.product ?? "");
+      setDraft(d.draft ?? undefined);
+      setParent(d.parent ?? null);
+      setStart(d.start ?? 0);
+      setEnd(d.end ?? undefined);
+      setKept(true);
+    } catch {
+      // Private browsing and blocked site data both throw here. The editor
+      // must still work; it just cannot keep a draft.
+    }
+  }, [draftKey]);
+
+  const hasWork = !!(
+    caption ||
+    captions ||
+    media ||
+    product ||
+    parent ||
+    start ||
+    end !== undefined ||
+    template !== "original"
+  );
+  useEffect(() => {
+    try {
+      if (!hasWork) {
+        localStorage.removeItem(draftKey);
+        setKept(false);
+        return;
+      }
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          caption,
+          captions,
+          template,
+          media,
+          product,
+          draft,
+          parent,
+          start,
+          end,
+        }),
+      );
+      setKept(true);
+    } catch {}
+  }, [
+    draftKey,
+    hasWork,
+    caption,
+    captions,
+    template,
+    media,
+    product,
+    draft,
+    parent,
+    start,
+    end,
+  ]);
   const save = async (publish: boolean) => {
     try {
       const result = await act("post", {
@@ -546,6 +642,7 @@ export function Cut() {
         publish,
       });
       if (publish) {
+        clearKept();
         setDraft(undefined);
         setCaption("");
         setCaptions("");
@@ -715,6 +812,20 @@ export function Cut() {
               <ArrowUpRight size={16} />
             </button>
           </div>
+          {/* UX-05: say plainly that work is being kept, and give an explicit
+              way to throw it away. An invisible autosave is its own surprise. */}
+          {kept && (
+            <p className="draft-kept">
+              <Check size={13} />
+              {t(
+                "এই ডিভাইসে খসড়া রাখা হয়েছে — প্রকাশ করা হয়নি",
+                "Draft kept on this device — not published",
+              )}
+              <button type="button" className="text-button" onClick={discard}>
+                {t("মুছে ফেলো", "Discard")}
+              </button>
+            </p>
+          )}
         </section>
         <aside>
           <div className="preview-label">

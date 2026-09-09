@@ -1631,6 +1631,59 @@ nav {
   border-bottom: 1px solid var(--line);
   padding: 23px 0;
 }
+
+/* Moderation queue: a reviewer must see evidence and urgency before deciding
+   (docs/11-UI-UX-AUDIT.md UX-02). Report evidence and an appeal statement are
+   deliberately styled apart so they cannot be mistaken for each other. */
+.case-meta {
+  display: block;
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.case-meta.overdue {
+  color: #ffc24b;
+  font-weight: 600;
+}
+.evidence {
+  margin: 10px 0 14px;
+  padding-left: 12px;
+  border-left: 2px solid #526d59;
+}
+.evidence.appeal {
+  border-left-color: #ffc24b;
+}
+.evidence-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+.evidence blockquote,
+.evidence-note {
+  margin: 0 0 8px;
+  border-left: 0;
+  padding: 0;
+}
+.evidence-note cite {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* Keep a destructive action on its own row, away from descriptive metadata. */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
 .case p,
 .case blockquote {
   font-size: 13px;
@@ -2302,12 +2355,20 @@ dialog::backdrop {
 @media (max-width: 760px) {
   .sidebar {
     transform: translateX(-100%);
-    transition: transform 0.2s;
+    /* visibility, not just transform: a translated-offscreen drawer stays in
+       the keyboard focus order, which sent focus to x = -227px
+       (docs/11-UI-UX-AUDIT.md UX-03). `visibility: hidden` makes descendants
+       unfocusable, and transitions discretely so the slide still animates. */
+    visibility: hidden;
+    transition:
+      transform 0.2s,
+      visibility 0.2s;
     width: 240px;
     background: #0b140e;
   }
   .sidebar.is-open {
     transform: translateX(0);
+    visibility: visible;
   }
   .menu-backdrop {
     position: fixed;
@@ -2849,4 +2910,20 @@ dialog::backdrop {
   .small {
     min-height: 40px;
   }
+}
+
+/* Cut keeps unsaved work on the device (docs/11-UI-UX-AUDIT.md UX-05). Say so
+   visibly, and keep Discard reachable next to the statement. */
+.draft-kept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.draft-kept svg {
+  color: var(--green);
+  flex: none;
 }

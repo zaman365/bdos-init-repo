@@ -18,6 +18,7 @@ import {
   Empty,
   Pill,
   options,
+  When,
   type Row,
 } from "./ui";
 export function Shop() {
@@ -357,7 +358,7 @@ function Order({ order: o, seller }: { order: Row; seller: boolean }) {
         {o.return_window_ends && (
           <span>
             {t("রিটার্নের শেষ তারিখ", "Return window closes")}:{" "}
-            {new Date(o.return_window_ends).toLocaleString()}
+            <When value={o.return_window_ends} />
           </span>
         )}
         {o.return_reason && <span>{o.return_reason}</span>}
