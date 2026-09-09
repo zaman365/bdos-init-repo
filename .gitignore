@@ -4,3 +4,11 @@ dist/
 .wrangler/
 .env
 .env.local
+.next/
+.data/
+.env.*
+!.env.example
+*.tsbuildinfo
+test-results/
+playwright-report/
+coverage/

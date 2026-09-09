@@ -1,0 +1,72 @@
+-- Operational layer for the executable MVP; original schema is preserved.
+CREATE SCHEMA app;
+ALTER TABLE identity.user_account ADD COLUMN roles text[] NOT NULL DEFAULT ARRAY['viewer','creator'];
+ALTER TABLE identity.user_account ADD COLUMN data_saver boolean NOT NULL DEFAULT true;
+ALTER TABLE identity.seller ADD CONSTRAINT seller_one_per_owner UNIQUE(owner_id);
+CREATE TABLE app.session (token_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES identity.user_account(id), expires_at timestamptz NOT NULL);
+CREATE TABLE app.otp (phone text PRIMARY KEY, code_hash text NOT NULL, attempts int NOT NULL DEFAULT 0, expires_at timestamptz NOT NULL, sent_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE app.command (user_id uuid REFERENCES identity.user_account(id), key text NOT NULL, fingerprint text NOT NULL, response jsonb NOT NULL, created_at timestamptz DEFAULT now(), PRIMARY KEY(user_id,key));
+CREATE TABLE app.rate_limit (key text PRIMARY KEY, hits int NOT NULL, resets_at timestamptz NOT NULL);
+CREATE TABLE app.audit (id bigserial PRIMARY KEY, actor_id uuid REFERENCES identity.user_account(id), action text NOT NULL, subject text, detail jsonb NOT NULL DEFAULT '{}', at timestamptz NOT NULL DEFAULT now());
+CREATE TRIGGER audit_immutable BEFORE UPDATE OR DELETE ON app.audit FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+CREATE TABLE app.flag (name text PRIMARY KEY, enabled boolean NOT NULL DEFAULT true);
+INSERT INTO app.flag(name) VALUES ('commerce'),('live'),('ads'),('uploads'),('payouts');
+CREATE TABLE app.notification (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES identity.user_account(id), title text NOT NULL, body text NOT NULL, read_at timestamptz, created_at timestamptz DEFAULT now());
+CREATE INDEX ON app.notification(user_id,created_at);
+CREATE TABLE app.message (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), sender_id uuid NOT NULL REFERENCES identity.user_account(id), recipient_id uuid NOT NULL REFERENCES identity.user_account(id), body text NOT NULL CHECK(length(body) BETWEEN 1 AND 2000), created_at timestamptz DEFAULT now());
+CREATE TABLE app.block (user_id uuid REFERENCES identity.user_account(id), target_id uuid REFERENCES identity.user_account(id), PRIMARY KEY(user_id,target_id), CHECK(user_id<>target_id));
+CREATE TABLE app.media (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid REFERENCES identity.user_account(id), filename text NOT NULL, mime text NOT NULL, bytes int NOT NULL, created_at timestamptz DEFAULT now());
+ALTER TABLE content.post ADD COLUMN media_id uuid REFERENCES app.media(id);
+ALTER TABLE content.post ADD COLUMN cover text NOT NULL DEFAULT '/art/stage.svg';
+ALTER TABLE content.post ADD COLUMN trim_start numeric NOT NULL DEFAULT 0;
+ALTER TABLE content.post ADD COLUMN trim_end numeric;
+ALTER TABLE content.post ADD COLUMN template text NOT NULL DEFAULT 'original';
+ALTER TABLE content.post ADD COLUMN captions text NOT NULL DEFAULT '';
+CREATE TABLE content.reaction (post_id uuid REFERENCES content.post(id), user_id uuid REFERENCES identity.user_account(id), PRIMARY KEY(post_id,user_id));
+CREATE TABLE content.comment (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), post_id uuid NOT NULL REFERENCES content.post(id), user_id uuid NOT NULL REFERENCES identity.user_account(id), body text NOT NULL CHECK(length(body) BETWEEN 1 AND 1000), pinned boolean NOT NULL DEFAULT false, created_at timestamptz DEFAULT now());
+CREATE TABLE content.watch (post_id uuid REFERENCES content.post(id), user_id uuid REFERENCES identity.user_account(id), watch_ms int NOT NULL DEFAULT 0 CHECK(watch_ms>=0), completed boolean DEFAULT false, created_at timestamptz DEFAULT now(), PRIMARY KEY(post_id,user_id));
+ALTER TABLE commerce.product ADD COLUMN cover text NOT NULL DEFAULT '/art/craft.svg';
+ALTER TABLE commerce.customer_order ADD COLUMN address text NOT NULL DEFAULT '';
+ALTER TABLE commerce.customer_order ADD COLUMN confirmed_at timestamptz;
+ALTER TABLE commerce.customer_order ADD COLUMN return_reason text;
+ALTER TABLE commerce.customer_order ADD COLUMN provider_ref text;
+ALTER TABLE commerce.customer_order ADD COLUMN commission_bp int NOT NULL DEFAULT 0;
+ALTER TABLE commerce.customer_order ADD COLUMN seller_net_paisa paisa NOT NULL DEFAULT 0;
+CREATE TABLE commerce.cart (user_id uuid REFERENCES identity.user_account(id), sku_id uuid REFERENCES commerce.sku(id), qty int NOT NULL CHECK(qty BETWEEN 1 AND 99), source_post_id uuid REFERENCES content.post(id), PRIMARY KEY(user_id,sku_id));
+CREATE TABLE commerce.voucher (code text PRIMARY KEY, seller_id uuid REFERENCES identity.seller(id), amount_paisa paisa NOT NULL, minimum_paisa paisa NOT NULL DEFAULT 0, ends_at timestamptz NOT NULL);
+CREATE TABLE affiliate.showcase (creator_id uuid REFERENCES identity.user_account(id), product_id uuid REFERENCES commerce.product(id), PRIMARY KEY(creator_id,product_id));
+ALTER TABLE affiliate.sample_request ADD COLUMN tracking text;
+ALTER TABLE live.session ADD COLUMN product_id uuid REFERENCES commerce.product(id);
+CREATE TABLE live.signal (id bigserial PRIMARY KEY, session_id uuid REFERENCES live.session(id), sender_id uuid REFERENCES identity.user_account(id), recipient_id uuid REFERENCES identity.user_account(id), payload jsonb NOT NULL, created_at timestamptz DEFAULT now());
+CREATE INDEX ON live.signal(session_id,recipient_id,id);
+CREATE TABLE live.chat (id bigserial PRIMARY KEY, session_id uuid REFERENCES live.session(id), user_id uuid REFERENCES identity.user_account(id), body text NOT NULL CHECK(length(body) BETWEEN 1 AND 500), created_at timestamptz DEFAULT now());
+CREATE TABLE ads.consent (post_id uuid REFERENCES content.post(id), seller_id uuid REFERENCES identity.seller(id), granted_at timestamptz DEFAULT now(), PRIMARY KEY(post_id,seller_id));
+ALTER TABLE ads.campaign ADD COLUMN name text NOT NULL DEFAULT 'Campaign';
+ALTER TABLE ads.campaign ADD COLUMN total_budget_paisa paisa NOT NULL DEFAULT 0;
+ALTER TABLE ads.campaign ADD COLUMN product_id uuid REFERENCES commerce.product(id);
+CREATE TABLE ads.event (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), campaign_id uuid REFERENCES ads.campaign(id), user_id uuid REFERENCES identity.user_account(id), kind text NOT NULL CHECK(kind IN ('impression','click','conversion')), day date DEFAULT current_date, cost_paisa paisa NOT NULL DEFAULT 0, UNIQUE(campaign_id,user_id,kind,day));
+CREATE TABLE app.academy_progress (user_id uuid REFERENCES identity.user_account(id), lesson text NOT NULL, completed_at timestamptz DEFAULT now(), PRIMARY KEY(user_id,lesson));
+CREATE TABLE app.brief (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), seller_id uuid REFERENCES identity.seller(id), title text NOT NULL, description text NOT NULL, budget_paisa paisa NOT NULL, state text NOT NULL DEFAULT 'open');
+CREATE TABLE app.application (brief_id uuid REFERENCES app.brief(id), creator_id uuid REFERENCES identity.user_account(id), pitch text NOT NULL, state text NOT NULL DEFAULT 'applied', PRIMARY KEY(brief_id,creator_id));
+CREATE TABLE app.partner_lead (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), partner_id uuid REFERENCES identity.user_account(id), business_name text NOT NULL, district text NOT NULL, phone bd_msisdn NOT NULL, state text NOT NULL DEFAULT 'new', created_at timestamptz DEFAULT now());
+-- Fill the zero-line journal hole and prevent later additions to a posted entry.
+ALTER TABLE ledger.journal_entry ADD COLUMN transaction_id bigint NOT NULL DEFAULT txid_current();
+CREATE FUNCTION ledger.check_header() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE n int; s bigint;
+BEGIN
+ SELECT count(*),coalesce(sum(amount_paisa),0) INTO n,s FROM ledger.journal_line WHERE entry_id=NEW.id;
+ IF n<2 THEN RAISE EXCEPTION 'double-entry needs at least 2 lines'; END IF;
+ IF s<>0 THEN RAISE EXCEPTION 'journal out of balance'; END IF;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER journal_header_balanced AFTER INSERT ON ledger.journal_entry DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ledger.check_header();
+CREATE FUNCTION ledger.lock_posted_entry() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF (SELECT transaction_id FROM ledger.journal_entry WHERE id=NEW.entry_id)<>txid_current() THEN RAISE EXCEPTION 'posted journal is append-only'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER journal_no_late_lines BEFORE INSERT ON ledger.journal_line FOR EACH ROW EXECUTE FUNCTION ledger.lock_posted_entry();
+CREATE TRIGGER account_immutable BEFORE UPDATE OR DELETE ON ledger.account FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+CREATE OR REPLACE FUNCTION identity.age_years(dob date) RETURNS int LANGUAGE sql STABLE AS $$ SELECT extract(year FROM age(current_date,dob))::int $$;
+CREATE TABLE commerce.item_policy (order_item_id uuid PRIMARY KEY REFERENCES commerce.order_item(id), net_goods_paisa paisa NOT NULL, commission_bp int NOT NULL CHECK(commission_bp BETWEEN 0 AND 2000));
+CREATE TABLE ads.placement(campaign_id uuid REFERENCES ads.campaign(id),user_id uuid REFERENCES identity.user_account(id),expires_at timestamptz NOT NULL,PRIMARY KEY(campaign_id,user_id));
