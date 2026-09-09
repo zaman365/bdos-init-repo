@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: bdos_mvp
+      POSTGRES_USER: bdos
+      POSTGRES_PASSWORD: bdos_local
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - bdos_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bdos -d bdos_mvp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  web:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://bdos:bdos_local@db:5432/bdos_mvp
+      APP_ORIGIN: http://localhost:3000
+      BDOS_SANDBOX: "true"
+      MEDIA_DIR: /app/.data/media
+      FFMPEG_PATH: bundled
+    command:
+      ["sh", "-c", "npm run db:migrate && npm run db:seed && npm run start"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - bdos_media:/app/.data/media
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+volumes:
+  bdos_postgres:
+  bdos_media:

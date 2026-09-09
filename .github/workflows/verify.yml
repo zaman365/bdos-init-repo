@@ -1,0 +1,41 @@
+name: Verify MVP
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bdos
+          POSTGRES_PASSWORD: bdos_test
+          POSTGRES_DB: bdos_mvp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bdos -d bdos_mvp"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://bdos:bdos_test@localhost:5432/bdos_mvp
+      BDOS_SANDBOX: "true"
+      FFMPEG_PATH: bundled
+      APP_ORIGIN: http://127.0.0.1:3100
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run db:migrate && npm run db:seed
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: test-results/

@@ -1,72 +1,82 @@
 # BDOS — বিডস
 
-**Bangladesh On Stage.** A short-video, creator, affiliate and social-commerce ecosystem
-built for Bangladesh: Android-first, Bangla-first, escrow-native, payout-obsessive.
+**Bangladesh On Stage.** দেখো · কিনো · কামাও — Watch · Buy · Earn.
 
-> **দেখো · কিনো · কামাও** — Watch · Buy · Earn.
+A runnable Next.js + PostgreSQL web MVP spanning Discover, Cut, Shop, Creator
+Studio, Affiliate, Ads, small-room LIVE, Seller Center, Nirapod, Partner Network,
+and Operations. It includes persistent accounts and data, role checks, video
+transcoding, inventory/escrow/returns, an append-only ledger, and automated tests.
 
-This repository currently holds the plan and the brand system. Start here:
+**Payments, payouts, courier events and demo identity checks are explicitly
+sandboxed.** Native apps, production payment integrations, scaled LIVE delivery,
+trained moderation/ranking and other roadmap features are not represented as complete.
 
-| Document | What's in it |
-|---|---|
-| [docs/01-tiktok-ecosystem-study.md](docs/01-tiktok-ecosystem-study.md) | TikTok taken apart: the interest graph, creation as replication, the content→commerce→ads ladder, and the eight mechanics BDOS must reproduce |
-| [docs/02-bdos-product-ecosystem.md](docs/02-bdos-product-ecosystem.md) | The loop, the six surfaces, cross-cutting systems, personas |
-| [docs/03-architecture-and-stack.md](docs/03-architecture-and-stack.md) | Every stack decision with the alternative we rejected; video pipeline, ranking, the ledger |
-| [docs/04-brand-system.md](docs/04-brand-system.md) | The Matra identity, colour, dual-script typography, voice, gifts, sound |
-| [docs/05-bangladesh-operating-reality.md](docs/05-bangladesh-operating-reality.md) | COD and RTO, MFS payouts, escrow law, language, the commerce calendar, Nirapod |
-| [docs/06-roadmap-org-economics.md](docs/06-roadmap-org-economics.md) | Phases and their gates, org shape, revenue lines, unit economics, risks |
-| [bdos-ecosystem.html](bdos-ecosystem.html) | One-page summary of the whole ecosystem |
-| [brand/](brand/) | Design tokens (CSS + JSON), icon and wordmark |
+## Run
 
-## Deployment
-
-Live at **https://bdos.io** via Cloudflare Pages (project `bdos`), auto-deployed from
-`main`. Pages settings: no build command, build output directory `site`.
-
-| Path | What | Exposure |
-|---|---|---|
-| `site/index.html` | Public landing page + waitlist | Public |
-| `site/404.html` | Branded not-found page | Public |
-| `functions/api/waitlist.js` | Waitlist endpoint, writes to the `WAITLIST` KV binding (namespace `bdos-waitlist`) | Public POST |
-| `site/blueprint/index.html` | The full ecosystem blueprint | **Gated — do not deploy ungated** |
-
-`site/blueprint/index.html` is generated from the canonical `bdos-ecosystem.html`:
-
-```
-python3 scripts/build-blueprint.py
+```sh
+docker compose up --build
+# Open http://localhost:3000
 ```
 
-It holds take rates, unit economics, org headcount and the risk register, so it must
-only be served behind Cloudflare Access. It is deliberately absent from `site/` until
-that gate exists.
+Or use Node 22.19+ and PostgreSQL 17+:
 
-## Guidelines
+```sh
+npm ci
+cp .env.example .env.local
+# Configure DATABASE_URL and APP_ORIGIN for a dedicated local database.
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
 
-Operating rules, each stating the reason alongside the rule — see
-[docs/guidelines/](docs/guidelines/00-INDEX.md).
-
-| # | Guideline | Governs |
-|---|---|---|
-| 01 | [Engineering](docs/guidelines/01-engineering.md) | Code, APIs, errors, concurrency, testing, review |
-| 02 | [Product](docs/guidelines/02-product.md) | What ships, in what order, and the gates between |
-| 03 | [Design](docs/guidelines/03-design.md) | Brand application, UI rules, dual-script type, accessibility |
-| 04 | [Money](docs/guidelines/04-money.md) | Paisa arithmetic, ledger invariants, escrow, tax, payouts |
-| 05 | [Trust & Safety](docs/guidelines/05-trust-safety.md) | Moderation, Nirapod, enforcement, escalation |
-| 06 | [Data & privacy](docs/guidelines/06-data-privacy.md) | PII, residency, retention, KYC, what we refuse to collect |
-| 07 | [Ranking](docs/guidelines/07-ranking.md) | What the feed optimises, and what it must never optimise |
-| 08 | [Operations](docs/guidelines/08-operations.md) | Runbook, reconciliation, on-call, multi-agent hygiene |
-
-Current gap list against these rules: [docs/08-SYSTEM-AUDIT.md](docs/08-SYSTEM-AUDIT.md).
+The sandbox login offers Viewer, Creator, Seller, Operations and Partner accounts
+and displays a one-use OTP. For full instructions and account details, read the
+**[BDOS MVP User Manual](docs/BDOS-MVP-USER-MANUAL.md)**.
 
 ## Verify
 
-```
-npm run verify      # typecheck + package tests + database invariants
-./db/apply.sh       # rebuild a local database from migrations
-./db/test.sh        # 17 ledger/commerce invariants against real PostgreSQL
+```sh
+npm run verify       # TypeScript, unit tests, isolated DB integration, production build
+npm run test:e2e     # Desktop/mobile browser suite; requires Playwright Chromium
+npm run maintenance # Clear due commissions and remove expired transient records
 ```
 
-**Sequencing rule:** attention before commerce · commerce before ads · payouts before growth spend.
+Tests require a disposable PostgreSQL database and `CREATEDB` permission.
+`db:migrate` is non-destructive and checksum-checked. The legacy `db:apply` script
+resets a database and is not the normal application setup path.
 
-All market figures in these documents are planning estimates, and all legal points need
-counsel's confirmation before they drive a decision.
+## Repository map
+
+| Path | Purpose |
+|---|---|
+| `app/` | Responsive Bangla/English application and HTTP routes |
+| `lib/` | Authentication, domain workflows, scoped locking, queries, media |
+| `packages/` | Money, ledger and ranking rules with tests |
+| `db/migrations/` | PostgreSQL schemas and operational constraints |
+| `scripts/` | Migration, seed, maintenance and blueprint generation |
+| `tests/` | Workflow, concurrency, permission, media and browser tests |
+| `brand/`, `public/art/` | Matra identity, tokens, original demo illustrations |
+| `docs/` | Original strategy, audit, guidelines and user manual |
+| `site/`, `functions/` | Existing Cloudflare Pages marketing site and waitlist |
+
+## Planning and audit
+
+Start with [the MVP documentation audit](docs/07-MVP-AUDIT.md),
+[the earlier system audit](docs/08-SYSTEM-AUDIT.md), and
+[the implementation and verification record](docs/09-MVP-IMPLEMENTATION.md).
+The original [ecosystem](docs/02-bdos-product-ecosystem.md),
+[architecture](docs/03-architecture-and-stack.md),
+[brand](docs/04-brand-system.md) and [roadmap](docs/06-roadmap-org-economics.md)
+explain the long-term direction. Estimates and legal/tax assumptions require
+independent validation before production use.
+
+## Deployment distinction
+
+The existing **bdos.io** Cloudflare Pages project serves `site/` from `main`.
+Its `/blueprint` endpoint has a fail-closed password gate in
+`functions/_middleware.js`; keep `BLUEPRINT_PASSWORD` configured.
+The Node MVP is a separate service requiring PostgreSQL and persistent media
+storage. A branch push does not deploy that service to the marketing domain.
+Do not use a static export of the MVP or expose repository docs as public assets.
+
+**Attention before commerce. Commerce before ads. Payouts before growth spend.**

@@ -30,7 +30,9 @@ export function assertPaisa(v: number, label = "amount"): Paisa {
 
 export function assertBp(bp: number): BasisPoints {
   if (!Number.isInteger(bp) || bp < 0 || bp > 10_000) {
-    throw new MoneyError(`basis points must be an integer in 0..10000, got ${bp}`);
+    throw new MoneyError(
+      `basis points must be an integer in 0..10000, got ${bp}`,
+    );
   }
   return bp;
 }
@@ -57,7 +59,8 @@ export function taka(amount: number): Paisa {
 export function splitBp(total: Paisa, bp: BasisPoints): [Paisa, Paisa] {
   assertPaisa(total, "total");
   assertBp(bp);
-  if (total < 0) throw new MoneyError(`splitBp expects a non-negative total, got ${total}`);
+  if (total < 0)
+    throw new MoneyError(`splitBp expects a non-negative total, got ${total}`);
   const share = Number((BigInt(total) * BigInt(bp)) / 10_000n);
   return [share, total - share];
 }
@@ -74,19 +77,24 @@ export function shareBp(total: Paisa, bp: BasisPoints): Paisa {
  */
 export function allocate(total: Paisa, weights: number[]): Paisa[] {
   assertPaisa(total, "total");
-  if (weights.length === 0) throw new MoneyError("allocate needs at least one weight");
-  if (weights.some((w) => !Number.isSafeInteger(w) || w < 0)) throw new MoneyError("weights must be non-negative");
+  if (weights.length === 0)
+    throw new MoneyError("allocate needs at least one weight");
+  if (weights.some((w) => !Number.isSafeInteger(w) || w < 0))
+    throw new MoneyError("weights must be non-negative");
   const sum = weights.reduce((a, b) => a + b, 0);
   if (sum <= 0) throw new MoneyError("weights must sum to more than zero");
 
-  if (total < 0 || !Number.isSafeInteger(sum)) throw new MoneyError("allocation must be nonnegative and weights sum must be safe");
+  if (total < 0 || !Number.isSafeInteger(sum))
+    throw new MoneyError(
+      "allocation must be nonnegative and weights sum must be safe",
+    );
   const numerators = weights.map((w) => BigInt(total) * BigInt(w));
   const floors = numerators.map((n) => Number(n / BigInt(sum)));
   let leftover = total - floors.reduce((a, b) => a + b, 0);
 
   const order = numerators
     .map((v, i) => ({ i, frac: v % BigInt(sum) }))
-    .sort((a, b) => a.frac === b.frac ? a.i - b.i : a.frac > b.frac ? -1 : 1);
+    .sort((a, b) => (a.frac === b.frac ? a.i - b.i : a.frac > b.frac ? -1 : 1));
 
   const out = [...floors];
   for (let k = 0; leftover > 0; k = (k + 1) % order.length) {

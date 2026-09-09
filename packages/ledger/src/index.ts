@@ -12,23 +12,53 @@
  * See docs/guidelines/04-money.md.
  */
 
-import { type Paisa, type BasisPoints, assertPaisa, splitBp, shareBp, vat, withhold, VAT_BP } from "../../money/src/index.ts";
+import {
+  type Paisa,
+  type BasisPoints,
+  assertPaisa,
+  splitBp,
+  shareBp,
+  vat,
+  withhold,
+  VAT_BP,
+} from "../../money/src/index.ts";
 
 export type AccountKind =
-  | "cash_mfs" | "cod_receivable"
-  | "escrow" | "seller_payable" | "creator_payable" | "commission_held"
-  | "gift_liability" | "coin_liability" | "tax_withheld" | "courier_payable"
-  | "platform_revenue" | "refund_expense" | "rto_expense";
+  | "cash_mfs"
+  | "cod_receivable"
+  | "escrow"
+  | "seller_payable"
+  | "creator_payable"
+  | "commission_held"
+  | "gift_liability"
+  | "coin_liability"
+  | "tax_withheld"
+  | "courier_payable"
+  | "platform_revenue"
+  | "refund_expense"
+  | "rto_expense";
 
 export type EntryKind =
-  | "order_paid_into_escrow" | "cod_collected" | "escrow_released_to_seller"
-  | "commission_accrued" | "commission_cleared" | "commission_clawed_back"
-  | "refund_issued" | "rto_cost_absorbed"
-  | "coins_purchased" | "gift_sent" | "gift_cleared"
-  | "payout_executed" | "tax_remitted" | "manual_correction";
+  | "order_paid_into_escrow"
+  | "cod_collected"
+  | "escrow_released_to_seller"
+  | "commission_accrued"
+  | "commission_cleared"
+  | "commission_clawed_back"
+  | "refund_issued"
+  | "rto_cost_absorbed"
+  | "coins_purchased"
+  | "gift_sent"
+  | "gift_cleared"
+  | "payout_executed"
+  | "tax_remitted"
+  | "manual_correction";
 
 const DEBIT_POSITIVE: ReadonlySet<AccountKind> = new Set<AccountKind>([
-  "cash_mfs", "cod_receivable", "refund_expense", "rto_expense",
+  "cash_mfs",
+  "cod_receivable",
+  "refund_expense",
+  "rto_expense",
 ]);
 
 export function normalSide(kind: AccountKind): "debit" | "credit" {
@@ -79,26 +109,42 @@ export function buildEntry(e: Entry): Entry {
     throw new LedgerError("every entry needs an idempotency key");
   }
   if (e.lines.length < 2) {
-    throw new LedgerError(`entry "${e.idempotencyKey}" has ${e.lines.length} line(s); double-entry needs at least 2`);
+    throw new LedgerError(
+      `entry "${e.idempotencyKey}" has ${e.lines.length} line(s); double-entry needs at least 2`,
+    );
   }
   let sum = 0;
   for (const l of e.lines) {
     assertPaisa(l.amount, `line on ${l.account.kind}`);
     if (l.amount === 0) {
-      throw new LedgerError(`entry "${e.idempotencyKey}" has a zero-value line on ${l.account.kind}`);
+      throw new LedgerError(
+        `entry "${e.idempotencyKey}" has a zero-value line on ${l.account.kind}`,
+      );
     }
     sum += l.amount;
   }
   if (sum !== 0) {
-    throw new LedgerError(`entry "${e.idempotencyKey}" is out of balance by ${sum} paisa`);
+    throw new LedgerError(
+      `entry "${e.idempotencyKey}" is out of balance by ${sum} paisa`,
+    );
   }
   return Object.freeze({ ...e, lines: Object.freeze([...e.lines]) as Line[] });
 }
 
 export const ALL_ACCOUNT_KINDS: readonly AccountKind[] = [
-  "cash_mfs", "cod_receivable", "escrow", "seller_payable", "creator_payable",
-  "commission_held", "gift_liability", "coin_liability", "tax_withheld",
-  "courier_payable", "platform_revenue", "refund_expense", "rto_expense",
+  "cash_mfs",
+  "cod_receivable",
+  "escrow",
+  "seller_payable",
+  "creator_payable",
+  "commission_held",
+  "gift_liability",
+  "coin_liability",
+  "tax_withheld",
+  "courier_payable",
+  "platform_revenue",
+  "refund_expense",
+  "rto_expense",
 ];
 
 /**
@@ -107,19 +153,31 @@ export const ALL_ACCOUNT_KINDS: readonly AccountKind[] = [
  * create a journal line against an account that does not exist.
  */
 export function isAccountKind(v: unknown): v is AccountKind {
-  return typeof v === "string" && (ALL_ACCOUNT_KINDS as readonly string[]).includes(v);
+  return (
+    typeof v === "string" &&
+    (ALL_ACCOUNT_KINDS as readonly string[]).includes(v)
+  );
 }
 
 export function toAccountKind(v: unknown): AccountKind {
-  if (!isAccountKind(v)) throw new LedgerError(`unknown account kind: ${JSON.stringify(v)}`);
+  if (!isAccountKind(v))
+    throw new LedgerError(`unknown account kind: ${JSON.stringify(v)}`);
   return v;
 }
 
 /** Typed line builders. Exported so no caller needs to write a raw Line. */
-export const debit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
-  ({ account: { kind, owner }, amount, memo });
-export const credit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
-  ({ account: { kind, owner }, amount: -amount, memo });
+export const debit = (
+  kind: AccountKind,
+  amount: Paisa,
+  owner?: string,
+  memo?: string,
+): Line => ({ account: { kind, owner }, amount, memo });
+export const credit = (
+  kind: AccountKind,
+  amount: Paisa,
+  owner?: string,
+  memo?: string,
+): Line => ({ account: { kind, owner }, amount: -amount, memo });
 
 // ── order money-in ──────────────────────────────────────────────────────────
 
@@ -140,9 +198,10 @@ export function orderMoneyIn(o: OrderMoneyIn): Entry {
   return buildEntry({
     kind: o.method === "cod" ? "cod_collected" : "order_paid_into_escrow",
     idempotencyKey: `order:${o.orderId}:money-in`,
-    description: o.method === "cod"
-      ? `COD collected for order ${o.orderId}, held in escrow`
-      : `Payment received for order ${o.orderId}, held in escrow`,
+    description:
+      o.method === "cod"
+        ? `COD collected for order ${o.orderId}, held in escrow`
+        : `Payment received for order ${o.orderId}, held in escrow`,
     orderId: o.orderId,
     lines: [
       debit(asset, o.payablePaisa, undefined, o.method),
@@ -189,7 +248,9 @@ export function releaseEscrow(r: EscrowRelease): EscrowReleaseResult {
   const discountPaisa = r.discountPaisa ?? 0;
   if (discountPaisa < 0) throw new LedgerError("discount cannot be negative");
   if ((r.commissionBp === undefined) === (r.commissionPaisa === undefined)) {
-    throw new LedgerError("supply exactly one of commissionBp or commissionPaisa");
+    throw new LedgerError(
+      "supply exactly one of commissionBp or commissionPaisa",
+    );
   }
 
   // Exactly what the buyer paid, and therefore exactly what escrow holds.
@@ -197,18 +258,44 @@ export function releaseEscrow(r: EscrowRelease): EscrowReleaseResult {
   if (held <= 0) throw new LedgerError("nothing to release");
 
   const netGoods = r.goodsPaisa - discountPaisa;
-  const commissionPaisa = r.commissionPaisa ?? shareBp(netGoods, r.commissionBp!);
+  const commissionPaisa =
+    r.commissionPaisa ?? shareBp(netGoods, r.commissionBp!);
   const vatPaisa = vat(commissionPaisa, POLICY.vatBp);
   const sellerNetPaisa = netGoods - commissionPaisa - vatPaisa;
-  if (sellerNetPaisa < 0) throw new LedgerError("commission plus VAT exceeds the goods value");
+  if (sellerNetPaisa < 0)
+    throw new LedgerError("commission plus VAT exceeds the goods value");
 
   const lines: Line[] = [
     debit("escrow", held, undefined, `release for order ${r.orderId}`),
-    credit("seller_payable", sellerNetPaisa, r.sellerId, "goods net of commission and VAT"),
+    credit(
+      "seller_payable",
+      sellerNetPaisa,
+      r.sellerId,
+      "goods net of commission and VAT",
+    ),
   ];
-  if (commissionPaisa > 0) lines.push(credit("platform_revenue", commissionPaisa, undefined, `${r.commissionBp}bp commission`));
-  if (vatPaisa > 0) lines.push(credit("tax_withheld", vatPaisa, undefined, "VAT on commission"));
-  if (r.deliveryPaisa > 0) lines.push(credit("courier_payable", r.deliveryPaisa, r.courierId, "delivery charge"));
+  if (commissionPaisa > 0)
+    lines.push(
+      credit(
+        "platform_revenue",
+        commissionPaisa,
+        undefined,
+        `${r.commissionBp}bp commission`,
+      ),
+    );
+  if (vatPaisa > 0)
+    lines.push(
+      credit("tax_withheld", vatPaisa, undefined, "VAT on commission"),
+    );
+  if (r.deliveryPaisa > 0)
+    lines.push(
+      credit(
+        "courier_payable",
+        r.deliveryPaisa,
+        r.courierId,
+        "delivery charge",
+      ),
+    );
 
   return {
     entry: buildEntry({
@@ -218,7 +305,9 @@ export function releaseEscrow(r: EscrowRelease): EscrowReleaseResult {
       orderId: r.orderId,
       lines,
     }),
-    commissionPaisa, vatPaisa, sellerNetPaisa,
+    commissionPaisa,
+    vatPaisa,
+    sellerNetPaisa,
   };
 }
 
@@ -247,19 +336,44 @@ export interface CommissionAccrualResult {
  * booked against platform revenue, and it is HELD until the return window
  * closes — a refund would otherwise pay commission on a sale that unwound.
  */
-export function accrueCommission(c: CommissionAccrual): CommissionAccrualResult {
+export function accrueCommission(
+  c: CommissionAccrual,
+): CommissionAccrualResult {
   const commissionPaisa = shareBp(c.goodsPaisa, c.rateBp);
-  if (commissionPaisa === 0) throw new LedgerError("commission rounds to zero; do not post an empty accrual");
+  if (commissionPaisa === 0)
+    throw new LedgerError(
+      "commission rounds to zero; do not post an empty accrual",
+    );
   const withholdingPaisa = withhold(commissionPaisa, POLICY.withholdingBp);
   const netPaisa = commissionPaisa - withholdingPaisa;
 
-  const holdUntil = new Date(c.deliveredAt.getTime() + POLICY.returnWindowDays * 86_400_000);
+  const holdUntil = new Date(
+    c.deliveredAt.getTime() + POLICY.returnWindowDays * 86_400_000,
+  );
 
   const lines: Line[] = [
-    debit("platform_revenue", commissionPaisa, undefined, `affiliate CAC ${c.rateBp}bp`),
-    credit("commission_held", netPaisa, c.creatorId, `held until ${holdUntil.toISOString().slice(0, 10)}`),
+    debit(
+      "platform_revenue",
+      commissionPaisa,
+      undefined,
+      `affiliate CAC ${c.rateBp}bp`,
+    ),
+    credit(
+      "commission_held",
+      netPaisa,
+      c.creatorId,
+      `held until ${holdUntil.toISOString().slice(0, 10)}`,
+    ),
   ];
-  if (withholdingPaisa > 0) lines.push(credit("tax_withheld", withholdingPaisa, undefined, "source tax on commission"));
+  if (withholdingPaisa > 0)
+    lines.push(
+      credit(
+        "tax_withheld",
+        withholdingPaisa,
+        undefined,
+        "source tax on commission",
+      ),
+    );
 
   return {
     entry: buildEntry({
@@ -269,12 +383,19 @@ export function accrueCommission(c: CommissionAccrual): CommissionAccrualResult 
       orderId: c.orderId,
       lines,
     }),
-    commissionPaisa, withholdingPaisa, netPaisa, holdUntil,
+    commissionPaisa,
+    withholdingPaisa,
+    netPaisa,
+    holdUntil,
   };
 }
 
 /** The return window closed without a refund: the money becomes withdrawable. */
-export function clearCommission(a: { orderItemId: string; creatorId: string; netPaisa: Paisa }): Entry {
+export function clearCommission(a: {
+  orderItemId: string;
+  creatorId: string;
+  netPaisa: Paisa;
+}): Entry {
   if (a.netPaisa <= 0) throw new LedgerError("nothing to clear");
   return buildEntry({
     kind: "commission_cleared",
@@ -289,15 +410,26 @@ export function clearCommission(a: { orderItemId: string; creatorId: string; net
 
 /** The order unwound inside the window, or fraud review rejected it. */
 export function clawBackCommission(a: {
-  orderItemId: string; creatorId: string; commissionPaisa: Paisa;
-  withholdingPaisa: Paisa; reason: string;
+  orderItemId: string;
+  creatorId: string;
+  commissionPaisa: Paisa;
+  withholdingPaisa: Paisa;
+  reason: string;
 }): Entry {
   const net = a.commissionPaisa - a.withholdingPaisa;
   const lines: Line[] = [
     debit("commission_held", net, a.creatorId, a.reason),
     credit("platform_revenue", a.commissionPaisa, undefined, "CAC recovered"),
   ];
-  if (a.withholdingPaisa > 0) lines.push(debit("tax_withheld", a.withholdingPaisa, undefined, "withholding reversed"));
+  if (a.withholdingPaisa > 0)
+    lines.push(
+      debit(
+        "tax_withheld",
+        a.withholdingPaisa,
+        undefined,
+        "withholding reversed",
+      ),
+    );
   return buildEntry({
     kind: "commission_clawed_back",
     idempotencyKey: `item:${a.orderItemId}:commission-clawback`,
@@ -314,7 +446,11 @@ export function clawBackCommission(a: {
  * biggest drag on commerce margin (docs/06 §4), so it gets its own expense
  * account and is never buried in "other".
  */
-export function absorbRtoCost(a: { orderId: string; courierId: string; costPaisa: Paisa }): Entry {
+export function absorbRtoCost(a: {
+  orderId: string;
+  courierId: string;
+  costPaisa: Paisa;
+}): Entry {
   if (a.costPaisa <= 0) throw new LedgerError("RTO cost must be positive");
   return buildEntry({
     kind: "rto_cost_absorbed",
@@ -333,17 +469,36 @@ export function absorbRtoCost(a: { orderId: string; courierId: string; costPaisa
  * platform absorbs whatever it cannot recover (typically the delivery leg).
  */
 export function issueRefund(a: {
-  orderId: string; sellerId: string; refundPaisa: Paisa;
+  orderId: string;
+  sellerId: string;
+  refundPaisa: Paisa;
   recoverFromSellerPaisa: Paisa;
 }): Entry {
   if (a.refundPaisa <= 0) throw new LedgerError("refund must be positive");
-  if (a.recoverFromSellerPaisa > a.refundPaisa) throw new LedgerError("cannot recover more than the refund");
+  if (a.recoverFromSellerPaisa > a.refundPaisa)
+    throw new LedgerError("cannot recover more than the refund");
   const absorbed = a.refundPaisa - a.recoverFromSellerPaisa;
   const lines: Line[] = [
-    credit("cash_mfs", a.refundPaisa, undefined, `refund for order ${a.orderId}`),
+    credit(
+      "cash_mfs",
+      a.refundPaisa,
+      undefined,
+      `refund for order ${a.orderId}`,
+    ),
   ];
-  if (a.recoverFromSellerPaisa > 0) lines.push(debit("seller_payable", a.recoverFromSellerPaisa, a.sellerId, "refund recovered"));
-  if (absorbed > 0) lines.push(debit("refund_expense", absorbed, undefined, "platform absorbed"));
+  if (a.recoverFromSellerPaisa > 0)
+    lines.push(
+      debit(
+        "seller_payable",
+        a.recoverFromSellerPaisa,
+        a.sellerId,
+        "refund recovered",
+      ),
+    );
+  if (absorbed > 0)
+    lines.push(
+      debit("refund_expense", absorbed, undefined, "platform absorbed"),
+    );
   return buildEntry({
     kind: "refund_issued",
     idempotencyKey: `order:${a.orderId}:refund`,
@@ -368,15 +523,35 @@ export interface GiftResult {
  * a config file someone can quietly change.
  */
 export function sendGift(g: {
-  sendId: string; hostId: string; senderId: string; grossPaisa: Paisa;
+  sendId: string;
+  hostId: string;
+  senderId: string;
+  grossPaisa: Paisa;
 }): GiftResult {
-  if (g.hostId === g.senderId) throw new LedgerError("a host cannot gift themselves");
+  if (g.hostId === g.senderId)
+    throw new LedgerError("a host cannot gift themselves");
   if (g.grossPaisa <= 0) throw new LedgerError("gift value must be positive");
-  const [creatorPaisa, platformPaisa] = splitBp(g.grossPaisa, POLICY.giftCreatorBp);
+  const [creatorPaisa, platformPaisa] = splitBp(
+    g.grossPaisa,
+    POLICY.giftCreatorBp,
+  );
 
-  const lines: Line[] = [debit("coin_liability", g.grossPaisa, undefined, "coins spent")];
-  if (creatorPaisa > 0) lines.push(credit("gift_liability", creatorPaisa, g.hostId, `${POLICY.giftCreatorBp / 100}% creator share`));
-  if (platformPaisa > 0) lines.push(credit("platform_revenue", platformPaisa, undefined, "platform share"));
+  const lines: Line[] = [
+    debit("coin_liability", g.grossPaisa, undefined, "coins spent"),
+  ];
+  if (creatorPaisa > 0)
+    lines.push(
+      credit(
+        "gift_liability",
+        creatorPaisa,
+        g.hostId,
+        `${POLICY.giftCreatorBp / 100}% creator share`,
+      ),
+    );
+  if (platformPaisa > 0)
+    lines.push(
+      credit("platform_revenue", platformPaisa, undefined, "platform share"),
+    );
 
   return {
     entry: buildEntry({
@@ -385,7 +560,8 @@ export function sendGift(g: {
       description: `Gift to ${g.hostId}`,
       lines,
     }),
-    creatorPaisa, platformPaisa,
+    creatorPaisa,
+    platformPaisa,
   };
 }
 
@@ -397,7 +573,9 @@ export function sendGift(g: {
  * relationship permanently.
  */
 export function executePayout(p: {
-  payoutId: string; payeeId: string; amountPaisa: Paisa;
+  payoutId: string;
+  payeeId: string;
+  amountPaisa: Paisa;
   from: "creator_payable" | "gift_liability" | "seller_payable";
 }): Entry {
   if (p.amountPaisa <= 0) throw new LedgerError("payout must be positive");
@@ -414,7 +592,10 @@ export function executePayout(p: {
 
 // ── an in-memory book, for tests and local development ──────────────────────
 
-export interface BalanceKey { kind: AccountKind; owner?: string }
+export interface BalanceKey {
+  kind: AccountKind;
+  owner?: string;
+}
 
 export class Book {
   private readonly seen = new Set<string>();

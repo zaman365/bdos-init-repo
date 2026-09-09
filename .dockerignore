@@ -1,0 +1,11 @@
+.git
+node_modules
+.next
+.data
+.env*
+!.env.example
+playwright-report
+test-results
+*.tsbuildinfo
+site/blueprint
+bdos-ecosystem.html

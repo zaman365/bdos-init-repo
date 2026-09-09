@@ -1,26 +1,233 @@
-import {randomUUID} from 'node:crypto';
-try{process.loadEnvFile('.env.local');}catch{}
-const {pool,tx,one,requireSandbox}=await import('../lib/db');
-const {journal}=await import('../lib/journal');
+import { randomUUID } from "node:crypto";
+try {
+  process.loadEnvFile(".env.local");
+} catch {}
+const { pool, tx, one, requireSandbox } = await import("../lib/db");
+const { journal } = await import("../lib/journal");
 requireSandbox();
-export const ids={creator:'11111111-1111-4111-8111-111111111111',buyer:'22222222-2222-4222-8222-222222222222',seller:'33333333-3333-4333-8333-333333333333',admin:'44444444-4444-4444-8444-444444444444',partner:'55555555-5555-4555-8555-555555555555',minor:'99999999-9999-4999-8999-999999999999',shop:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'};
-await tx(async db=>{
- await db.query('SELECT pg_advisory_xact_lock(802005)');
- if(await one(db,'SELECT 1 FROM identity.user_account WHERE id=$1',[ids.creator])){console.log('Demo data already exists; nothing changed.');return;}
- const people=[['creator','+8801712345678','nusrat','Nusrat Jahan','1999-04-02',['viewer','creator']],['buyer','+8801812345678','rifat','Rifat Ahmed','2000-01-15',['viewer','creator']],['seller','+8801912345678','bogurashop','Bogura Craft House','1988-07-07',['viewer','creator','seller']],['admin','+8801512345678','operations','BDOS Operations','1990-01-01',['viewer','creator','admin']],['partner','+8801312345678','shakib','Shakib • Partner','1995-03-03',['viewer','creator','partner']],['minor','+8801612345678','tamim','Tamim','2012-05-20',['viewer','creator']]] as const;
- for(const [key,phone,handle,name,dob,roles] of people){const id=ids[key];await db.query("INSERT INTO identity.user_account(id,msisdn,handle,display_name,date_of_birth,roles,state) VALUES($1,$2,$3,$4,$5,$6,'active')",[id,phone,handle,name,dob,roles]);await db.query('INSERT INTO identity.creator_profile(user_id,bio,district) VALUES($1,$2,\'Dhaka\')',[id,'Made in Bangladesh. Shared with the world.']);await db.query('INSERT INTO trust.nirapod_setting(user_id,allow_duet,allow_stitch) VALUES($1,$2,$2)',[id,key==='creator']);if(key!=='minor')await db.query("INSERT INTO identity.kyc_record(subject_id,vault_ref,state,decided_at) VALUES($1,$2,'verified',now())",[id,`sandbox-seed:${key}`]);}
- await db.query("INSERT INTO identity.seller(id,owner_id,legal_name,trade_name,dbid,state) VALUES($1,$2,'Bogura Craft House','Bogura Craft House','SANDBOX-DBID-001','active')",[ids.shop,ids.seller]);
- const products=[['Everyday Jamdani','রোজকার জামদানি',10,240000,'/art/craft.svg','Natural cotton · handwoven','Natural / M'],['Morning Dew Serum','মর্নিং ডিউ সিরাম',1,85000,'/art/beauty.svg','A gentle daily skincare ritual. Demo product.','30 ml'],['Kacchi Spice Kit','কাচ্চি মসলা কিট',7,45000,'/art/food.svg','Bring your family recipe to life.','250 g'],['Nakshi Tote','নকশি ব্যাগ',10,65000,'/art/craft.svg','An everyday bag with a story.','Olive']];
- const productIds:string[]=[];
- for(const [title,bn,category,price,cover,description,variant] of products){const id=randomUUID();productIds.push(id);await db.query('INSERT INTO commerce.product(id,seller_id,category_id,title_en,title_bn,description,is_active,cover) VALUES($1,$2,$3,$4,$5,$6,true,$7)',[id,ids.shop,category,title,bn,description,cover]);await db.query("INSERT INTO commerce.sku(product_id,code,variant_label,price_paisa,stock) VALUES($1,'default',$2,$3,50)",[id,variant,price]);}
- const captions=['সুতোর ভাঁজে বাংলাদেশের গল্প। A little craft, a lot of heart. #jamdani','স্কিনকেয়ার মানে নিজের জন্য একটু সময়। My morning skincare ritual.','কাচ্চি, আড্ডা আর শুক্রবার। Friday tastes like home. #kacchi','তোমার শহর। তোমার মঞ্চ। A new day on your stage.','Made by hand. Carried with love. নকশি ব্যাগ','Small rituals, brighter mornings. সকালের আলো','From Bogura, with love. বগুড়ার গল্প','Create something that feels like you. নিজের গল্প বলো'];
- for(let i=0;i<captions.length;i++){const author=i%3===2?ids.partner:i%3===1?ids.seller:ids.creator;const p=await one(db,"INSERT INTO content.post(author_id,kind,caption,caption_lang,state,published_at,cover) VALUES($1,'photo_carousel',$2,'bn','published',now()-$3*interval '1 hour',$4) RETURNING id",[author,captions[i],i,products[i%4][4]]);await db.query('INSERT INTO content.post_stats(post_id) VALUES($1)',[p!.id]);await db.query('INSERT INTO content.audition(post_id) VALUES($1)',[p!.id]);await db.query('INSERT INTO commerce.post_product(post_id,product_id,tagged_by) VALUES($1,$2,$3)',[p!.id,productIds[i%4],author]);if(author===ids.creator)await db.query('INSERT INTO ads.consent(post_id,seller_id) VALUES($1,$2)',[p!.id,ids.shop]);}
- const plan=await one(db,"INSERT INTO affiliate.plan(seller_id,kind,rate_bp) VALUES($1,'shop',300) RETURNING id",[ids.shop]);
- for(const id of productIds){await db.query('INSERT INTO affiliate.plan_product(plan_id,product_id) VALUES($1,$2)',[plan!.id,id]);await db.query('INSERT INTO affiliate.showcase(creator_id,product_id) VALUES($1,$2)',[ids.creator,id]);}
- await db.query('INSERT INTO content.follow(follower_id,followee_id) VALUES($1,$2),($2,$1)',[ids.buyer,ids.creator]);
- await db.query("INSERT INTO app.brief(seller_id,title,description,budget_paisa) VALUES($1,'The everyday Jamdani story','Show us how you style local craft in everyday life. One original video, 30–60 seconds, Bangla captions.',1500000)",[ids.shop]);
- await db.query("INSERT INTO commerce.voucher(code,seller_id,amount_paisa,minimum_paisa,ends_at) VALUES('STAGE100',$1,10000,100000,now()+interval '30 days')",[ids.shop]);
- for(const id of [ids.buyer,ids.seller])await journal(db,{kind:'coins_purchased',idempotencyKey:`seed:${id}`,description:'Demo prepaid credit; no real funds',lines:[{account:{kind:'cash_mfs'},amount:500000},{account:{kind:'coin_liability',owner:id},amount:-500000}]});
- console.log('Seeded six sandbox accounts, eight posts, four products and affiliate/brand programs.');
+export const ids = {
+  creator: "11111111-1111-4111-8111-111111111111",
+  buyer: "22222222-2222-4222-8222-222222222222",
+  seller: "33333333-3333-4333-8333-333333333333",
+  admin: "44444444-4444-4444-8444-444444444444",
+  partner: "55555555-5555-4555-8555-555555555555",
+  minor: "99999999-9999-4999-8999-999999999999",
+  shop: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+};
+await tx(async (db) => {
+  await db.query("SELECT pg_advisory_xact_lock(802005)");
+  if (
+    await one(db, "SELECT 1 FROM identity.user_account WHERE id=$1", [
+      ids.creator,
+    ])
+  ) {
+    console.log("Demo data already exists; nothing changed.");
+    return;
+  }
+  const people = [
+    [
+      "creator",
+      "+8801712345678",
+      "nusrat",
+      "Nusrat Jahan",
+      "1999-04-02",
+      ["viewer", "creator"],
+    ],
+    [
+      "buyer",
+      "+8801812345678",
+      "rifat",
+      "Rifat Ahmed",
+      "2000-01-15",
+      ["viewer", "creator"],
+    ],
+    [
+      "seller",
+      "+8801912345678",
+      "bogurashop",
+      "Bogura Craft House",
+      "1988-07-07",
+      ["viewer", "creator", "seller"],
+    ],
+    [
+      "admin",
+      "+8801512345678",
+      "operations",
+      "BDOS Operations",
+      "1990-01-01",
+      ["viewer", "creator", "admin"],
+    ],
+    [
+      "partner",
+      "+8801312345678",
+      "shakib",
+      "Shakib • Partner",
+      "1995-03-03",
+      ["viewer", "creator", "partner"],
+    ],
+    [
+      "minor",
+      "+8801612345678",
+      "tamim",
+      "Tamim",
+      "2012-05-20",
+      ["viewer", "creator"],
+    ],
+  ] as const;
+  for (const [key, phone, handle, name, dob, roles] of people) {
+    const id = ids[key];
+    await db.query(
+      "INSERT INTO identity.user_account(id,msisdn,handle,display_name,date_of_birth,roles,state) VALUES($1,$2,$3,$4,$5,$6,'active')",
+      [id, phone, handle, name, dob, roles],
+    );
+    await db.query(
+      "INSERT INTO identity.creator_profile(user_id,bio,district) VALUES($1,$2,'Dhaka')",
+      [id, "Made in Bangladesh. Shared with the world."],
+    );
+    await db.query(
+      "INSERT INTO trust.nirapod_setting(user_id,allow_duet,allow_stitch) VALUES($1,$2,$2)",
+      [id, key === "creator"],
+    );
+    if (key !== "minor")
+      await db.query(
+        "INSERT INTO identity.kyc_record(subject_id,vault_ref,state,decided_at) VALUES($1,$2,'verified',now())",
+        [id, `sandbox-seed:${key}`],
+      );
+  }
+  await db.query(
+    "INSERT INTO identity.seller(id,owner_id,legal_name,trade_name,dbid,state) VALUES($1,$2,'Bogura Craft House','Bogura Craft House','SANDBOX-DBID-001','active')",
+    [ids.shop, ids.seller],
+  );
+  const products = [
+    [
+      "Everyday Jamdani",
+      "রোজকার জামদানি",
+      10,
+      240000,
+      "/art/craft.svg",
+      "Natural cotton · handwoven",
+      "Natural / M",
+    ],
+    [
+      "Morning Dew Serum",
+      "মর্নিং ডিউ সিরাম",
+      1,
+      85000,
+      "/art/beauty.svg",
+      "A gentle daily skincare ritual. Demo product.",
+      "30 ml",
+    ],
+    [
+      "Kacchi Spice Kit",
+      "কাচ্চি মসলা কিট",
+      7,
+      45000,
+      "/art/food.svg",
+      "Bring your family recipe to life.",
+      "250 g",
+    ],
+    [
+      "Nakshi Tote",
+      "নকশি ব্যাগ",
+      10,
+      65000,
+      "/art/craft.svg",
+      "An everyday bag with a story.",
+      "Olive",
+    ],
+  ];
+  const productIds: string[] = [];
+  for (const [
+    title,
+    bn,
+    category,
+    price,
+    cover,
+    description,
+    variant,
+  ] of products) {
+    const id = randomUUID();
+    productIds.push(id);
+    await db.query(
+      "INSERT INTO commerce.product(id,seller_id,category_id,title_en,title_bn,description,is_active,cover) VALUES($1,$2,$3,$4,$5,$6,true,$7)",
+      [id, ids.shop, category, title, bn, description, cover],
+    );
+    await db.query(
+      "INSERT INTO commerce.sku(product_id,code,variant_label,price_paisa,stock) VALUES($1,'default',$2,$3,50)",
+      [id, variant, price],
+    );
+  }
+  const captions = [
+    "সুতোর ভাঁজে বাংলাদেশের গল্প। A little craft, a lot of heart. #jamdani",
+    "স্কিনকেয়ার মানে নিজের জন্য একটু সময়। My morning skincare ritual.",
+    "কাচ্চি, আড্ডা আর শুক্রবার। Friday tastes like home. #kacchi",
+    "তোমার শহর। তোমার মঞ্চ। A new day on your stage.",
+    "Made by hand. Carried with love. নকশি ব্যাগ",
+    "Small rituals, brighter mornings. সকালের আলো",
+    "From Bogura, with love. বগুড়ার গল্প",
+    "Create something that feels like you. নিজের গল্প বলো",
+  ];
+  for (let i = 0; i < captions.length; i++) {
+    const author =
+      i % 3 === 2 ? ids.partner : i % 3 === 1 ? ids.seller : ids.creator;
+    const p = await one(
+      db,
+      "INSERT INTO content.post(author_id,kind,caption,caption_lang,state,published_at,cover) VALUES($1,'photo_carousel',$2,'bn','published',now()-$3*interval '1 hour',$4) RETURNING id",
+      [author, captions[i], i, products[i % 4][4]],
+    );
+    await db.query("INSERT INTO content.post_stats(post_id) VALUES($1)", [
+      p!.id,
+    ]);
+    await db.query("INSERT INTO content.audition(post_id) VALUES($1)", [p!.id]);
+    await db.query(
+      "INSERT INTO commerce.post_product(post_id,product_id,tagged_by) VALUES($1,$2,$3)",
+      [p!.id, productIds[i % 4], author],
+    );
+    if (author === ids.creator)
+      await db.query(
+        "INSERT INTO ads.consent(post_id,seller_id) VALUES($1,$2)",
+        [p!.id, ids.shop],
+      );
+  }
+  const plan = await one(
+    db,
+    "INSERT INTO affiliate.plan(seller_id,kind,rate_bp) VALUES($1,'shop',300) RETURNING id",
+    [ids.shop],
+  );
+  for (const id of productIds) {
+    await db.query(
+      "INSERT INTO affiliate.plan_product(plan_id,product_id) VALUES($1,$2)",
+      [plan!.id, id],
+    );
+    await db.query(
+      "INSERT INTO affiliate.showcase(creator_id,product_id) VALUES($1,$2)",
+      [ids.creator, id],
+    );
+  }
+  await db.query(
+    "INSERT INTO content.follow(follower_id,followee_id) VALUES($1,$2),($2,$1)",
+    [ids.buyer, ids.creator],
+  );
+  await db.query(
+    "INSERT INTO app.brief(seller_id,title,description,budget_paisa) VALUES($1,'The everyday Jamdani story','Show us how you style local craft in everyday life. One original video, 30–60 seconds, Bangla captions.',1500000)",
+    [ids.shop],
+  );
+  await db.query(
+    "INSERT INTO commerce.voucher(code,seller_id,amount_paisa,minimum_paisa,ends_at) VALUES('STAGE100',$1,10000,100000,now()+interval '30 days')",
+    [ids.shop],
+  );
+  for (const id of [ids.buyer, ids.seller])
+    await journal(db, {
+      kind: "coins_purchased",
+      idempotencyKey: `seed:${id}`,
+      description: "Demo prepaid credit; no real funds",
+      lines: [
+        { account: { kind: "cash_mfs" }, amount: 500000 },
+        { account: { kind: "coin_liability", owner: id }, amount: -500000 },
+      ],
+    });
+  console.log(
+    "Seeded six sandbox accounts, eight posts, four products and affiliate/brand programs.",
+  );
 });
 await pool.end();
