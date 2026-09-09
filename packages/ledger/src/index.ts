@@ -95,9 +95,30 @@ export function buildEntry(e: Entry): Entry {
   return Object.freeze({ ...e, lines: Object.freeze([...e.lines]) as Line[] });
 }
 
-const debit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
+export const ALL_ACCOUNT_KINDS: readonly AccountKind[] = [
+  "cash_mfs", "cod_receivable", "escrow", "seller_payable", "creator_payable",
+  "commission_held", "gift_liability", "coin_liability", "tax_withheld",
+  "courier_payable", "platform_revenue", "refund_expense", "rto_expense",
+];
+
+/**
+ * Runtime guard for account kinds arriving from outside TypeScript's reach —
+ * a database row, a queue message. A typo must fail loudly here rather than
+ * create a journal line against an account that does not exist.
+ */
+export function isAccountKind(v: unknown): v is AccountKind {
+  return typeof v === "string" && (ALL_ACCOUNT_KINDS as readonly string[]).includes(v);
+}
+
+export function toAccountKind(v: unknown): AccountKind {
+  if (!isAccountKind(v)) throw new LedgerError(`unknown account kind: ${JSON.stringify(v)}`);
+  return v;
+}
+
+/** Typed line builders. Exported so no caller needs to write a raw Line. */
+export const debit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
   ({ account: { kind, owner }, amount, memo });
-const credit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
+export const credit = (kind: AccountKind, amount: Paisa, owner?: string, memo?: string): Line =>
   ({ account: { kind, owner }, amount: -amount, memo });
 
 // ── order money-in ──────────────────────────────────────────────────────────
@@ -137,8 +158,18 @@ export interface EscrowRelease {
   sellerId: string;
   goodsPaisa: Paisa;
   deliveryPaisa: Paisa;
-  /** Seller's marketplace commission rate, by category. */
-  commissionBp: BasisPoints;
+  /** Order-level discount. The buyer paid goods + delivery - discount. */
+  discountPaisa?: Paisa;
+  /**
+   * Seller's marketplace commission rate. Used when the whole order sits in
+   * one category. Ignored if commissionPaisa is supplied.
+   */
+  commissionBp?: BasisPoints;
+  /**
+   * Pre-computed commission, for a multi-category order where each line
+   * carries its own rate. Supply exactly one of commissionBp / commissionPaisa.
+   */
+  commissionPaisa?: Paisa;
   courierId: string;
 }
 
@@ -155,11 +186,20 @@ export interface EscrowReleaseResult {
  * the courier's, and the remainder is the seller's.
  */
 export function releaseEscrow(r: EscrowRelease): EscrowReleaseResult {
-  const held = r.goodsPaisa + r.deliveryPaisa;
+  const discountPaisa = r.discountPaisa ?? 0;
+  if (discountPaisa < 0) throw new LedgerError("discount cannot be negative");
+  if ((r.commissionBp === undefined) === (r.commissionPaisa === undefined)) {
+    throw new LedgerError("supply exactly one of commissionBp or commissionPaisa");
+  }
+
+  // Exactly what the buyer paid, and therefore exactly what escrow holds.
+  const held = r.goodsPaisa + r.deliveryPaisa - discountPaisa;
   if (held <= 0) throw new LedgerError("nothing to release");
-  const commissionPaisa = shareBp(r.goodsPaisa, r.commissionBp);
+
+  const netGoods = r.goodsPaisa - discountPaisa;
+  const commissionPaisa = r.commissionPaisa ?? shareBp(netGoods, r.commissionBp!);
   const vatPaisa = vat(commissionPaisa, POLICY.vatBp);
-  const sellerNetPaisa = r.goodsPaisa - commissionPaisa - vatPaisa;
+  const sellerNetPaisa = netGoods - commissionPaisa - vatPaisa;
   if (sellerNetPaisa < 0) throw new LedgerError("commission plus VAT exceeds the goods value");
 
   const lines: Line[] = [

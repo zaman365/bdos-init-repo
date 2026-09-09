@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildEntry, orderMoneyIn, releaseEscrow, accrueCommission, clearCommission,
   clawBackCommission, absorbRtoCost, issueRefund, sendGift, executePayout,
-  Book, LedgerError, POLICY, normalSide,
+  Book, LedgerError, POLICY, normalSide, isAccountKind, toAccountKind,
 } from "../src/index.ts";
 
 const SELLER = "seller-bogura";
@@ -105,6 +105,45 @@ describe("escrow release — the worked ৳1,400 order", () => {
   });
 });
 
+describe("escrow release — discounts and pre-computed commission", () => {
+  test("a discount reduces both what escrow held and the seller's net", () => {
+    const r = releaseEscrow({
+      orderId: "od", sellerId: SELLER, goodsPaisa: 140_000, deliveryPaisa: 6_000,
+      discountPaisa: 10_000, commissionBp: 600, courierId: COURIER,
+    });
+    // Buyer paid 140000 + 6000 - 10000 = 136000; commission is on net goods.
+    assert.equal(r.commissionPaisa, 7_800);          // 6% of 130000
+    assert.equal(r.vatPaisa, 390);
+    assert.equal(r.sellerNetPaisa, 130_000 - 7_800 - 390);
+    const debits = r.entry.lines.filter((l) => l.amount > 0).reduce((a, l) => a + l.amount, 0);
+    assert.equal(debits, 136_000);
+    assert.equal(r.entry.lines.reduce((a, l) => a + l.amount, 0), 0);
+  });
+
+  test("a multi-category order can supply commission directly", () => {
+    const r = releaseEscrow({
+      orderId: "om", sellerId: SELLER, goodsPaisa: 100_000, deliveryPaisa: 0,
+      commissionPaisa: 7_250, courierId: COURIER,
+    });
+    assert.equal(r.commissionPaisa, 7_250);
+    assert.equal(r.entry.lines.reduce((a, l) => a + l.amount, 0), 0);
+  });
+
+  test("supplying both a rate and an amount is rejected as ambiguous", () => {
+    assert.throws(() => releaseEscrow({
+      orderId: "ox", sellerId: SELLER, goodsPaisa: 100, deliveryPaisa: 0,
+      commissionBp: 600, commissionPaisa: 6, courierId: COURIER,
+    }), /exactly one of/);
+  });
+
+  test("supplying neither is rejected too", () => {
+    assert.throws(() => releaseEscrow({
+      orderId: "oy", sellerId: SELLER, goodsPaisa: 100, deliveryPaisa: 0,
+      courierId: COURIER,
+    } as any), /exactly one of/);
+  });
+});
+
 describe("affiliate commission", () => {
   const a = accrueCommission({
     orderId: "o1", orderItemId: "i1", creatorId: CREATOR,
@@ -142,6 +181,16 @@ describe("affiliate commission", () => {
     });
     assert.equal(e.lines.find((l) => l.account.kind === "platform_revenue")!.amount, -4_200);
     assert.equal(e.lines.reduce((s, l) => s + l.amount, 0), 0);
+  });
+});
+
+describe("account-kind guard", () => {
+  test("a database string is validated before it becomes a journal line", () => {
+    assert.equal(isAccountKind("escrow"), true);
+    assert.equal(isAccountKind("platform_revenu"), false);
+    assert.equal(isAccountKind(null), false);
+    assert.equal(toAccountKind("cash_mfs"), "cash_mfs");
+    assert.throws(() => toAccountKind("platform_revenu"), /unknown account kind/);
   });
 });
 

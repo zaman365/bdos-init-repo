@@ -54,6 +54,23 @@ describe("splitBp — the exactness invariant", () => {
     }
   });
 
+  test("stays exact at magnitudes where float multiplication would drift", () => {
+    // splitBp multiplies in BigInt, so total*bp never loses low-order bits.
+    // These cases all exceed 2^53 once multiplied and must still be exact.
+    const cases: [number, number][] = [
+      [Number.MAX_SAFE_INTEGER, 10_000],
+      [900_719_925_474_099, 3_333],
+      [123_456_789_012_345, 6_001],
+      [999_999_999_999_999, 7_777],
+    ];
+    for (const [total, bp] of cases) {
+      const [a, b] = splitBp(total, bp);
+      const exact = Number((BigInt(total) * BigInt(bp)) / 10_000n);
+      assert.equal(a, exact, `share drifted for ${total} @ ${bp}bp`);
+      assert.equal(a + b, total, `exactness broke for ${total} @ ${bp}bp`);
+    }
+  });
+
   test("rejects nonsense rates", () => {
     assert.throws(() => splitBp(100, 10_001), MoneyError);
     assert.throws(() => splitBp(100, -1), MoneyError);

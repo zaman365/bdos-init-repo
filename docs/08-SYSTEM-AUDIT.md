@@ -137,22 +137,35 @@ original schema that `011_mvp.sql` correctly closed:
   a later transaction, mutating history while still summing to zero. Its
   `lock_posted_entry()` trigger fixes this.
 
-One finding I could **not** reproduce:
+One finding I initially recorded as "not reproducible" — **that was my error**:
 
 > "Money multiplication could lose precision near the safe-integer limit."
 
-I tested `splitBp` at magnitudes up to 9×10¹⁵ paisa, including values with
-fifteen significant digits and awkward rates (3333bp, 4999bp, 6001bp, 7777bp).
-**Share drift was zero in every case.** The reason is structural: the product
-`total × bp` is immediately divided by 10,000 and floored, so a float error
-smaller than 10,000 is discarded by the floor. Reaching a wrong answer needs
-`total × bp` above roughly 9×10¹⁹ — that is ৳90 trillion in a single split,
-about 1,800× Bangladesh's annual GDP, and `assertPaisa` rejects such inputs
-anyway.
+I tested `splitBp` at magnitudes up to 9×10¹⁵ paisa with fifteen-significant-digit
+values and awkward rates, measured zero drift, and concluded the concern was
+structural rather than real. That conclusion was wrong for a simple reason: by
+the time I ran those tests, `packages/money` had already been rewritten to
+multiply in **BigInt** —
 
-It is not a bug at any reachable value. It is still worth a guard, because the
-failure mode is a *silent* wrong number: converting it to a loud error costs
-two lines. Recorded as **L4**, not a money defect.
+```ts
+const share = Number((BigInt(total) * BigInt(bp)) / 10_000n);
+```
+
+so I was measuring the fixed implementation, not the one the finding described.
+The original code was `Math.floor((total * bp) / 10_000)`, which does lose
+low-order bits once `total × bp` passes 2⁵³.
+
+**The finding was valid and the BigInt rewrite is the correct fix** — better
+than the range guard I had drafted, because it is exact at every magnitude
+instead of refusing large ones. `packages/money/test` now pins this with cases
+that all exceed 2⁵³ after multiplication, including `MAX_SAFE_INTEGER` at
+10,000bp.
+
+Lesson recorded for the runbook: on a tree more than one agent is editing,
+re-read the source at the moment of testing. A green test against code that
+changed under you proves nothing about the code you meant to test.
+
+Also noted from that document, and correct:
 
 Also noted from that document, and correct: `docs/06`'s staffing table sums to
 **134**, not the "~110" its prose claims, and the category seed rates span
@@ -169,6 +182,7 @@ Ordered by what unblocks the most downstream work.
 |---|---|---|
 | 1 | Fix the build gate (H1), wire scripts (M6) | Nothing else is verifiable until `verify` passes |
 | 2 | Single escrow implementation (M1), ranking tests (M5) | Money and the audition promise must have one tested definition |
+| 2a | **Agent coordination** — see "Concurrency hazard" below | Two agents on one working tree will overwrite each other |
 | 3 | Security pass: OTP hashing, cookie flags, directory scope (M2–M4) | Cheap, and each is a real exposure |
 | 4 | Per-entity locking (H4) | Removes the global write ceiling |
 | 5 | Provider interfaces: SMS, PSP, courier, media (H2) | Lets the production path exist while unconfigured |
@@ -179,3 +193,32 @@ Ordered by what unblocks the most downstream work.
 Items 1–6 are the difference between "a demo that runs" and "a system that can
 be trusted". Item 7 is the difference between that and a product. Item 8 is
 `docs/06` phases P1–P5 and is not a gap so much as the plan.
+
+
+---
+
+## Concurrency hazard (found during this audit)
+
+Two agents were editing this working tree at the same time: this session and a
+ChatGPT Codex session (`codex sandbox`, PIDs 36406/36407). Evidence:
+
+- `app/components/shop.tsx` and `content.tsx` appeared while the audit was running.
+- `app/components/Shell.tsx` was left mid-edit and did not parse (`TS1005`),
+  which suppressed every semantic error in the project and made `tsc` output
+  misleading.
+- `packages/money/src/index.ts` was rewritten under me between writing a fix
+  and testing it, which is how the precision correction above went wrong.
+- `git add -A` in commit `f14423a` swept up Codex's in-progress files, so a
+  non-parsing `Shell.tsx` is committed history.
+
+Consequences to avoid repeating:
+
+1. **Never `git add -A` on a shared tree.** Stage explicit paths.
+2. **A parse error anywhere blinds `tsc` everywhere.** Check that the tree
+   parses before trusting a clean typecheck.
+3. **Partition ownership by directory** — one agent in `app/`, another in
+   `packages/` and `db/` — or give each its own git worktree.
+
+Until that is settled, findings H1 (build gate) and H3 (no UI) cannot be
+reliably fixed from this session: both live in files the other agent is
+actively rewriting.
